@@ -1,1 +1,1 @@
-"# MagaDATAMODEL" 
+# MagaDATAMODEL
