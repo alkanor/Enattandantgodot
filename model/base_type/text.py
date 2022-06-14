@@ -7,4 +7,4 @@ class Text(BaseType):
 
     __tablename__ = f'text'
 
-    id = Column(_Text, primary_key = True)
+    id = Column(_Text, primary_key=True)

@@ -1,52 +1,85 @@
-from ._meta_meta import _META_SOMETHING
-
-
-from sqlalchemy import Column, Integer, String, ForeignKey
-from sqlalchemy.ext.declarative import DeclarativeMeta
-from sqlalchemy.orm.exc import UnmappedInstanceError
-from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm import relationship
 
 from model.base_type import STRING_SIZE
 
+from ._meta_meta import _META_SOMETHING
 
 
-
-def META_CONTEXT(SQLAlchemyBaseType):
+def META_CONTEXT(SQLAlchemyBaseType, SQLAlchemyContextType):
 
     tname_prefix = f'META_CTX'
 
+    class MetaDecl:
+        
+        @declared_attr
+        def contextid(cls):
+            return Column(Integer, ForeignKey(SQLAlchemyContextType.id), nullable=False)
+        
+        @declared_attr
+        def context(cls):
+            return relationship(SQLAlchemyContextType, foreign_keys=[cls.contextid])
+
     columns = {
         "id": Column(Integer, primary_key=True),
-        "contextid":  Column(String(STRING_SIZE))
+        "contextid": None, # already in MetaDecl for sqlalchemy reason
+        "context": None    # already in MetaDecl for sqlalchemy reason
     }
 
-    return _META_SOMETHING(tname_prefix, columns, SQLAlchemyBaseType)
+    return _META_SOMETHING(tname_prefix, columns, SQLAlchemyBaseType, MetaDecl)
 
 
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import _String
+    from model._implem import BaseType
+    from model.base_type import _String, BasicEntity
 
     session = create_session()
 
-    CTX_STRING = META_CONTEXT(_String)
+    from sqlalchemy import String
 
-    print(CTX_STRING.GET(session, contextid="bonjour"))
-    print(CTX_STRING.GET_CREATE(session, contextid="bonjour2"))
-    print(CTX_STRING.NEW(session, contextid="bonjour"))
-    print(CTX_STRING.NEW(session, contextid="bonjour"))
-    print(CTX_STRING.GET(session, contextid="bonjour"))
 
-    print(CTX_STRING.GET_COND(session, CTX_STRING.contextid == "bonjour2"))
+    columns = {
+        "id": Column(Integer, primary_key=True),
+        "value": Column(String(STRING_SIZE), unique=True),
+        "SUPERCOL": Column(Integer, default=666),
+    }
 
-    print(CTX_STRING.GET_CREATE(session, contextid="bonjour"))
-    print(CTX_STRING.GET_CREATE(session, contextid="bonjour3"))
+    Test = BasicEntity("thebaseobject", columns)
 
-    CTX_STRING.DELETE(session, contextid="bonjour", id=6)
-    print(CTX_STRING.NEW(session, contextid="bonjour4"))
+    v1 = Test(value="bonjour")
+    v2 = Test.GET_CREATE(session, value="bonjour2")
+    v3 = Test.GET_CREATE(session, value="bonjour3")
+    v4 = Test.GET_CREATE(session, value="bonjour4")
+
+    session.add(v1)
+    try:
+        session.commit()
+    except:
+        print("Rollbacking")
+        session.rollback()
+        v1 = Test.GET_CREATE(session, value="bonjour")
     
-    CTX_STRING.DELETE(session, contextid="bonjour")
 
-    print(CTX_STRING.GET(session, contextid="bonjour"))
-    print(CTX_STRING.GET_CREATE(session, contextid="bonjour"))
+    CTX_STRING = META_CONTEXT(_String, Test)
+
+    print(CTX_STRING.GET(session, context=v1))
+    print(CTX_STRING.GET_CREATE(session, context=v2))
+    print(CTX_STRING.NEW(session, context=v1))
+    print(CTX_STRING.NEW(session, context=v1))
+    print(CTX_STRING.GET(session, context=v1))
+
+    print(CTX_STRING.GET_COND(session, CTX_STRING.context == v2))
+
+    print(CTX_STRING.GET_CREATE(session, context=v1))
+    print(CTX_STRING.GET_CREATE(session, context=v3))
+
+    CTX_STRING.DELETE(session, context=v1, id=6)
+    print(CTX_STRING.NEW(session, context=v4))
+    
+    CTX_STRING.DELETE(session, context=v1)
+
+    print(CTX_STRING.GET(session, context=v1))
+    print(CTX_STRING.GET_CREATE(session, context=v1))

@@ -9,4 +9,4 @@ class String(BaseType):
 
     __tablename__ = f'string'
 
-    id = Column(_String(STRING_SIZE), primary_key = True)
+    id = Column(_String(STRING_SIZE), primary_key=True)
