@@ -1,33 +1,166 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import and_, delete
+from sqlalchemy.orm import relationship
 
 from model._implem import BaseType
 
+from model.metadata.named_date_metadata import NAMED_DATE_METADATA
 
 
-def LIST(SQLAlchemyBaseType):
+def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
 
-    class _LIST_NAME(BaseType):
-
-        __tablename__ = f'LIST_NAME<{SQLAlchemyBaseType.__tablename__}>'
-
-        id = Column(Integer, primary_key = True)
-        name = Column(String(STRING_SIZE), primary_key = True)
+    if not MetadataType:
+        MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType)
+    else:
+        MetadataClass = MetadataType(SQLAlchemyBaseType, *additional_args_to_construct_metadata)
 
 
-    class _LIST(BaseDatastructure):
+    class _LIST_ENTRY(BaseType):
 
-        __tablename__ = f'LIST<{SQLAlchemyBaseType.__tablename__}>'
+        __tablename__ = f'LIST<{SQLAlchemyBaseType.__tablename__}>[{MetadataClass.__slug__}]'
 
-        list_ref = Column(Integer, ForeignKey(f'LIST_NAME<{SQLAlchemyBaseType.__tablename__}>.id'))
+        id = Column(Integer, primary_key=True)
+        metadata_id = Column(Integer, ForeignKey(MetadataClass.id), nullable=False)
+        entry_id = Column(Integer, ForeignKey(SQLAlchemyBaseType.id), nullable=False)
 
-
-        def add(self, element):
-            pass
+        @declared_attr
+        def metadataobj(cls):
+            return relationship(MetadataClass, foreign_keys=[cls.metadata_id])
         
-        def add_many(self, elements):
-            pass
+        @declared_attr
+        def entry(cls):
+            return relationship(SQLAlchemyBaseType, foreign_keys=[cls.entry_id])
         
-        def get(self, index_list):
-            pass
+        def __repr__(self):
+            return f'{self.entry}'
+
+
+    class _LIST():
+
+        def __init__(self, session, **argv):
+            self.metadata = MetadataClass.GET_CREATE(session, **argv)
+            self.entries = session.query(_LIST_ENTRY).filter_by(metadata_id=self.metadata.id).all()
         
-        def delete(self, )
+
+        def add(self, session, element, commit=True):
+            new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
+            self.entries.append(new_item)
+            session.add(new_item)
+            if commit:
+                session.commit()
+        
+        def add_many(self, session, elements, commit=True, commit_every_n=10000):
+            for i, element in enumerate(elements):
+                new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
+                self.entries.append(new_item)
+                session.add(new_item)
+                if (i+1)%commit_every_n == 0:
+                    session.commit()
+            if commit:
+                session.commit()
+        
+        def delete(self, session, element):
+            assert(any(map(lambda x: x.entry_id == element.id, self.entries)))
+            statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id == element.id))
+            session.execute(statement)
+            session.commit()
+            self.entries = [x for x in self.entries if x.entry_id != element.id]
+
+        def delete_many(self, session, elements, cut_by_chunks=10000):
+            entries_id = set(map(lambda x: x.entry_id, self.entries))
+            elements_id = set(map(lambda x: x.id, elements))
+            assert(entries_id.intersection(elements_id) == elements_id)
+            for i in range(0, len(elements), cut_by_chunks):
+                statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id.in_(list(map(lambda x: x.id, elements[i:i+cut_by_chunks])))))
+                session.execute(statement)
+                session.commit()
+            self.entries = [x for x in self.entries if x.entry_id not in elements_id]
+
+        def __repr__(self):
+            return f'{self.metadata} : {self.entries}'
+
+
+        @classmethod
+        def GET(cls, session, **argv):
+            if not MetadataClass.GET(session, **argv):
+                return None
+            else:
+                return cls(session, **argv)
+        
+        @classmethod
+        def GET_CREATE(cls, session, **argv):
+            return cls(session, **argv)
+
+        @classmethod
+        def NEW(cls, session, **argv):
+            return cls(session, **argv)
+
+        @classmethod
+        def DELETE(cls, session, **argv):
+            existing = cls.GET(session, **argv)
+            if existing is None:
+                return
+            
+            MetadataClass.DELETE(session, **argv)
+            _LIST_ENTRIES.DELETE(session, existing.entries)
+                
+        @classmethod
+        def GET_COND(cls, session, condition):
+            from_metadata = MetadataClass.GET_COND(session, condition)
+            return list([cls(session, m) for m in from_metadata])
+
+    return _LIST
+
+
+
+if __name__ == "__main__":
+    from model_to_disk import create_session
+    from model.base_type import _String, BasicEntity, STRING_SIZE
+
+    from sqlalchemy import String
+
+
+    columns = {
+        "id": Column(Integer, primary_key=True),
+        "value": Column(String(STRING_SIZE), unique=True),
+        "ADD": Column(Integer, default=666),
+    }
+
+    Test = BasicEntity("bak2basics", columns)
+
+    session = create_session()
+
+    v1 = Test.GET_CREATE(session, value="bonjour1")
+    v2 = Test.GET_CREATE(session, value="bonjour2")
+    v3 = Test.GET_CREATE(session, value="bonjour3")
+    v4 = Test.GET_CREATE(session, value="bonjour4")
+
+
+    LIST_TYPE = LIST(Test)
+
+    mylist1 = LIST_TYPE(session, name="superlist1")
+    mylist2 = LIST_TYPE(session, name="superlist2")
+
+    mylist1.add(session, v1)
+    mylist1.add(session, v2)
+    mylist1.add(session, v3)
+    mylist1.add(session, v4)
+
+    mylist2.add_many(session, [v1, v2, v4])
+
+    print(mylist1)
+    print(mylist2)
+
+    mylist2.delete(session, v2)
+    print(mylist2)
+
+    try:
+        mylist2.delete(session, v2)
+        raise Exception("Should not happen")
+    except AssertionError as e:
+        print("deletion threw exception cause elem not existing")
+    print(mylist2)
+
+    mylist1.delete_many(session, [v1, v4])
+    print(mylist1)

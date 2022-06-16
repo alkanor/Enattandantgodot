@@ -2,12 +2,10 @@ from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
 
-from model.base_type import STRING_SIZE
-
-from ._meta_meta import _META_SOMETHING
+from ._metadata_meta import _META_SOMETHING
 
 
-def META_CONTEXT(SQLAlchemyBaseType, SQLAlchemyContextType):
+def CONTEXT_METADATA(SQLAlchemyBaseType, SQLAlchemyContextType):
 
     tname_prefix = f'META_CTX'
 
@@ -33,10 +31,7 @@ def META_CONTEXT(SQLAlchemyBaseType, SQLAlchemyContextType):
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model._implem import BaseType
-    from model.base_type import _String, BasicEntity
-
-    session = create_session()
+    from model.base_type import _String, BasicEntity, STRING_SIZE
 
     from sqlalchemy import String
 
@@ -50,6 +45,9 @@ if __name__ == "__main__":
     Test = BasicEntity("thebaseobject", columns)
 
     v1 = Test(value="bonjour")
+
+    session = create_session()
+    
     v2 = Test.GET_CREATE(session, value="bonjour2")
     v3 = Test.GET_CREATE(session, value="bonjour3")
     v4 = Test.GET_CREATE(session, value="bonjour4")
@@ -63,7 +61,7 @@ if __name__ == "__main__":
         v1 = Test.GET_CREATE(session, value="bonjour")
     
 
-    CTX_STRING = META_CONTEXT(_String, Test)
+    CTX_STRING = CONTEXT_METADATA(_String, Test)
 
     print(CTX_STRING.GET(session, context=v1))
     print(CTX_STRING.GET_CREATE(session, context=v2))

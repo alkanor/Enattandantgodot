@@ -1,20 +1,23 @@
-from ._meta_meta import _META_SOMETHING
-
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.sql import func
 
 from model.base_type import STRING_SIZE
 
+from ._metadata_meta import _META_SOMETHING
 
-def META_NAMED(SQLAlchemyBaseType):
 
-    tname_prefix = f'META_NAMED'
+def NAMED_DATE_METADATA(SQLAlchemyBaseType):
+
+    tname_prefix = f'META_NAMED_DATE'
 
     columns = {
         "id": Column(Integer, primary_key=True),
-        "name":  Column(String(STRING_SIZE))
+        "name":  Column(String(STRING_SIZE)),
+        "date": Column(DateTime(timezone=True), server_default=func.now()),
     }
 
     return _META_SOMETHING(tname_prefix, columns, SQLAlchemyBaseType)
+
 
 
 if __name__ == "__main__":
@@ -23,7 +26,7 @@ if __name__ == "__main__":
 
     session = create_session()
 
-    NAMED_STRING = META_NAMED(_String)
+    NAMED_STRING = NAMED_DATE_METADATA(_String)
 
     print(NAMED_STRING.GET(session, name="bonjour"))
     print(NAMED_STRING.GET_CREATE(session, name="bonjour2"))

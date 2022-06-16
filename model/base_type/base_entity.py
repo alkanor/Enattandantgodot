@@ -19,11 +19,12 @@ def BaseDictToAttrs(attr_dict):
     return BaseFromDict
 
 
-def BasicEntity(tablename, columns_dict, MetaAdditional=None):
+def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
 
     class SQLAlchClass(BaseDictToAttrs(columns_dict), MetaAdditional if MetaAdditional else object):
         
         __tablename__ = tablename
+        __slug__ = slug
 
         @classmethod
         def GET(cls, session, **argv):

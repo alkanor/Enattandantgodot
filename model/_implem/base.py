@@ -7,6 +7,7 @@ from model.general import sql_bases
 Base = declarative_base()
 sql_bases.append(Base)
 
+
 class MetaCreateTableWhenEngine(DeclarativeMeta):
 
     def __init__(self, name, bases, dict):
