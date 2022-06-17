@@ -38,8 +38,14 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
 
     class _LIST():
 
-        def __init__(self, session, **argv):
-            self.metadata = MetadataClass.GET_CREATE(session, **argv)
+        __metadataclass__ = MetadataClass
+
+        def __init__(self, session, *args, **argv):
+            if args:
+                assert(type(args[0]) == self.__metadataclass__)
+                self.metadata = args[0]
+            else:
+                self.metadata = MetadataClass.GET_CREATE(session, **argv)
             self.entries = session.query(_LIST_ENTRY).filter_by(metadata_id=self.metadata.id).all()
         
 
@@ -101,7 +107,6 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             existing = cls.GET(session, **argv)
             if existing is None:
                 return
-            
             MetadataClass.DELETE(session, **argv)
             _LIST_ENTRIES.DELETE(session, existing.entries)
                 
@@ -164,3 +169,8 @@ if __name__ == "__main__":
 
     mylist1.delete_many(session, [v1, v4])
     print(mylist1)
+
+    print(mylist1.__metadataclass__.name)
+
+    print(LIST_TYPE.GET_COND(session, LIST_TYPE.__metadataclass__.name.like("superlist%")))
+    print(LIST_TYPE.GET_COND(session, LIST_TYPE.__metadataclass__.name.like("%2")))

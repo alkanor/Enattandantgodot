@@ -46,3 +46,8 @@ if __name__ == "__main__":
 
     print(NAMED_STRING.GET(session, name="bonjour"))
     print(NAMED_STRING.GET_CREATE(session, name="bonjour"))
+
+    base_date = NAMED_STRING.GET(session, name="bonjour").date
+    print(f"At same date {base_date} {func.date(base_date)}")
+    print(NAMED_STRING.GET(session, date=str(base_date)))
+    print(NAMED_STRING.GET_COND(session, func.date(base_date) == func.date(NAMED_STRING.date)))
