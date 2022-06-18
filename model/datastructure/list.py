@@ -3,22 +3,41 @@ from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship
 
+from model.metadata.named_date_metadata import NAMED_DATE_METADATA
+from model.type_system import register_type
 from model._implem import BaseType
 
-from model.metadata.named_date_metadata import NAMED_DATE_METADATA
 
-
-def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
+def _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
 
     if not MetadataType:
         MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType)
     else:
         MetadataClass = MetadataType(SQLAlchemyBaseType, *additional_args_to_construct_metadata)
+    
+    metaclass_tablename = MetadataClass.__tablename__
+    entrytype_tablename = f'LIST<{SQLAlchemyBaseType.__tablename__}>[{MetadataClass.__slug__}]'
+
+    return metaclass_tablename, entrytype_tablename
+
+
+@register_type("LIST", _LIST_DEPENDANCIES)
+def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
+
+    metaclass_tablename, entrytype_tablename = _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata)
+
+    if not MetadataType:
+        MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType)
+    else:
+        MetadataClass = MetadataType(SQLAlchemyBaseType, *additional_args_to_construct_metadata)
+    
+    assert(metaclass_tablename == MetadataClass.__tablename__)
 
 
     class _LIST_ENTRY(BaseType):
 
-        __tablename__ = f'LIST<{SQLAlchemyBaseType.__tablename__}>[{MetadataClass.__slug__}]'
+        __tablename__ = entrytype_tablename
+        __basetype__ = SQLAlchemyBaseType
 
         id = Column(Integer, primary_key=True)
         metadata_id = Column(Integer, ForeignKey(MetadataClass.id), nullable=False)
@@ -39,6 +58,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
     class _LIST():
 
         __metadataclass__ = MetadataClass
+        __entrytype__ = _LIST_ENTRY
 
         def __init__(self, session, *args, **argv):
             if args:
@@ -82,6 +102,11 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
                 session.execute(statement)
                 session.commit()
             self.entries = [x for x in self.entries if x.entry_id not in elements_id]
+        
+        def clear(self, session):
+            statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id))
+            session.execute(statement)
+            session.commit()
 
         def __repr__(self):
             return f'{self.metadata} : {self.entries}'
@@ -100,15 +125,16 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
 
         @classmethod
         def NEW(cls, session, **argv):
-            return cls(session, **argv)
+            new_list = MetadataClass.NEW(session, **argv)
+            return cls(session, new_list)
 
         @classmethod
         def DELETE(cls, session, **argv):
             existing = cls.GET(session, **argv)
             if existing is None:
                 return
+            existing.clear(session)
             MetadataClass.DELETE(session, **argv)
-            _LIST_ENTRIES.DELETE(session, existing.entries)
                 
         @classmethod
         def GET_COND(cls, session, condition):
@@ -144,6 +170,11 @@ if __name__ == "__main__":
 
     LIST_TYPE = LIST(Test)
 
+    before = session.query(LIST_TYPE.__metadataclass__).all()
+    print(before)
+    [LIST_TYPE.DELETE(session, **{"id": i.id}) for i in before]
+
+
     mylist1 = LIST_TYPE(session, name="superlist1")
     mylist2 = LIST_TYPE(session, name="superlist2")
 
@@ -174,3 +205,17 @@ if __name__ == "__main__":
 
     print(LIST_TYPE.GET_COND(session, LIST_TYPE.__metadataclass__.name.like("superlist%")))
     print(LIST_TYPE.GET_COND(session, LIST_TYPE.__metadataclass__.name.like("%2")))
+
+
+    LIST_TYPE2 = LIST(Test) # just check unicity of type views
+    mylist3 = LIST_TYPE(session, name="superlist3")
+    mylist4 = LIST_TYPE(session, name="superlist1")
+
+    print(mylist4)
+
+    mylist3.add_many(session, [v2, v3, v4])
+    mylist4.add_many(session, [v1, v2, v3, v3, v4])
+
+    print(mylist3)
+    print(mylist4)
+    print(mylist1)
