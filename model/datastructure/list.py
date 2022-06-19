@@ -4,37 +4,41 @@ from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship
 
 from model.metadata.named_date_metadata import NAMED_DATE_METADATA
+from model._implem import BaseType, BaseChangeClassName
+from model.metadata import metaclass_for_metadata
 from model.type_system import register_type
-from model._implem import BaseType
+
+
+__objectname__ = "LIST"
 
 
 def _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
 
     if not MetadataType:
-        MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType)
+        MetadataClass = NAMED_DATE_METADATA(__objectname__)
     else:
-        MetadataClass = MetadataType(SQLAlchemyBaseType, *additional_args_to_construct_metadata)
+        MetadataClass = MetadataType(__objectname__, *additional_args_to_construct_metadata)
     
     metaclass_tablename = MetadataClass.__tablename__
-    entrytype_tablename = f'LIST<{SQLAlchemyBaseType.__tablename__}>[{MetadataClass.__slug__}]'
+    entrytype_tablename = f'{__objectname__}<{MetadataClass.__slug__},{SQLAlchemyBaseType.__tablename__}>'
 
     return metaclass_tablename, entrytype_tablename
 
 
-@register_type("LIST", _LIST_DEPENDANCIES)
+@register_type(__objectname__, _LIST_DEPENDANCIES)
 def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
 
     metaclass_tablename, entrytype_tablename = _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata)
 
     if not MetadataType:
-        MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType)
+        MetadataClass = NAMED_DATE_METADATA(__objectname__)
     else:
-        MetadataClass = MetadataType(SQLAlchemyBaseType, *additional_args_to_construct_metadata)
-    
+        MetadataClass = MetadataType(__objectname__, *additional_args_to_construct_metadata)
+
     assert(metaclass_tablename == MetadataClass.__tablename__)
 
 
-    class _LIST_ENTRY(BaseType):
+    class _LIST_ENTRY(BaseChangeClassName(SQLAlchemyBaseType, MetadataClass)):
 
         __tablename__ = entrytype_tablename
         __basetype__ = SQLAlchemyBaseType
@@ -55,10 +59,11 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             return f'{self.entry}'
 
 
-    class _LIST():
+    class _LIST(metaclass_for_metadata(MetadataClass)):
 
-        __metadataclass__ = MetadataClass
         __entrytype__ = _LIST_ENTRY
+        __tablename__ = entrytype_tablename # not a real SQLAlchemy table but to ease table creation
+
 
         def __init__(self, session, *args, **argv):
             if args:
@@ -70,15 +75,24 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
         
 
         def add(self, session, element, commit=True):
-            new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
+            assert(element.__class__ == SQLAlchemyBaseType)
+            if element.id:
+                new_item = _LIST_ENTRY(metadataobj=self.metadata, entry_id=element.id)
+            else:
+                session.add(element)
+                new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
             self.entries.append(new_item)
             session.add(new_item)
             if commit:
                 session.commit()
         
         def add_many(self, session, elements, commit=True, commit_every_n=10000):
+            assert(all([element.__class__ == SQLAlchemyBaseType for element in elements]))
             for i, element in enumerate(elements):
-                new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
+                if element.id:
+                    new_item = _LIST_ENTRY(metadataobj=self.metadata, entry_id=element.id)
+                else:
+                    new_item = _LIST_ENTRY(metadataobj=self.metadata, entry=element)
                 self.entries.append(new_item)
                 session.add(new_item)
                 if (i+1)%commit_every_n == 0:
@@ -88,6 +102,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
         
         def delete(self, session, element):
             assert(any(map(lambda x: x.entry_id == element.id, self.entries)))
+            assert(element.__class__ == SQLAlchemyBaseType)
             statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id == element.id))
             session.execute(statement)
             session.commit()
@@ -97,49 +112,22 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             entries_id = set(map(lambda x: x.entry_id, self.entries))
             elements_id = set(map(lambda x: x.id, elements))
             assert(entries_id.intersection(elements_id) == elements_id)
+            assert(all(map(lambda x: x.__class__ == SQLAlchemyBaseType, elements)))
             for i in range(0, len(elements), cut_by_chunks):
                 statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id.in_(list(map(lambda x: x.id, elements[i:i+cut_by_chunks])))))
                 session.execute(statement)
                 session.commit()
             self.entries = [x for x in self.entries if x.entry_id not in elements_id]
-        
+
         def clear(self, session):
             statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id))
             session.execute(statement)
             session.commit()
+            MetadataClass.DELETE(session, id=self.metadata.id)
+            self.entries = []
 
         def __repr__(self):
             return f'{self.metadata} : {self.entries}'
-
-
-        @classmethod
-        def GET(cls, session, **argv):
-            if not MetadataClass.GET(session, **argv):
-                return None
-            else:
-                return cls(session, **argv)
-        
-        @classmethod
-        def GET_CREATE(cls, session, **argv):
-            return cls(session, **argv)
-
-        @classmethod
-        def NEW(cls, session, **argv):
-            new_list = MetadataClass.NEW(session, **argv)
-            return cls(session, new_list)
-
-        @classmethod
-        def DELETE(cls, session, **argv):
-            existing = cls.GET(session, **argv)
-            if existing is None:
-                return
-            existing.clear(session)
-            MetadataClass.DELETE(session, **argv)
-                
-        @classmethod
-        def GET_COND(cls, session, condition):
-            from_metadata = MetadataClass.GET_COND(session, condition)
-            return list([cls(session, m) for m in from_metadata])
 
     return _LIST
 
@@ -147,8 +135,9 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import _String, BasicEntity, STRING_SIZE
+    from model.base_type import BasicEntity, STRING_SIZE
 
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy import String
 
 
@@ -172,7 +161,7 @@ if __name__ == "__main__":
 
     before = session.query(LIST_TYPE.__metadataclass__).all()
     print(before)
-    [LIST_TYPE.DELETE(session, **{"id": i.id}) for i in before]
+    [LIST_TYPE.DELETE(session, i) for i in before]
 
 
     mylist1 = LIST_TYPE(session, name="superlist1")
@@ -219,3 +208,12 @@ if __name__ == "__main__":
     print(mylist3)
     print(mylist4)
     print(mylist1)
+
+    try:
+        statement = delete(LIST_TYPE.__metadataclass__)
+        session.execute(statement)
+        session.commit()
+        raise Exception("Should not happen")
+    except IntegrityError:
+        print("Normal IntegrityError for deletion of foreign keys")
+        session.rollback()

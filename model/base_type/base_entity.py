@@ -21,7 +21,7 @@ def BaseDictToAttrs(attr_dict):
 
 def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
 
-    class SQLAlchClass(BaseDictToAttrs(columns_dict), MetaAdditional if MetaAdditional else object):
+    class _BasicEntity(BaseDictToAttrs(columns_dict), MetaAdditional if MetaAdditional else object):
         
         __tablename__ = tablename
         __slug__ = slug
@@ -46,6 +46,9 @@ def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
             newobj = cls(**argv)
             session.add(newobj)
             session.commit()
+            for k, v in argv.items():
+                if not hasattr(newobj, k):
+                    setattr(newobj, k, v)
             return newobj
 
         @classmethod
@@ -75,4 +78,4 @@ def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
             textual = ' - '.join(map(lambda x: x + " " + repr(getattr(self, x)), columns_dict))
             return f'{self.__tablename__} : {textual}'
 
-    return SQLAlchClass
+    return _BasicEntity

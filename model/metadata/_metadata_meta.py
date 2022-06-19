@@ -1,6 +1,6 @@
 from model.base_type import BasicEntity
 
 
-def _META_SOMETHING(metaname, columns_dict, SQLAlchemyBaseType, MetaAdditional=None):
+def _META_SOMETHING(metaname, columns_dict, MetaAdditional=None):
 
-    return BasicEntity(f'{metaname}[{SQLAlchemyBaseType.__tablename__}]', columns_dict, MetaAdditional, metaname)
+    return BasicEntity(metaname, columns_dict, MetaAdditional, metaname.split('<')[0])

@@ -7,9 +7,9 @@ from model.base_type import STRING_SIZE
 from ._metadata_meta import _META_SOMETHING
 
 
-def NAMED_CONTEXT_METADATA(SQLAlchemyBaseType, SQLAlchemyContextType):
+def NAMED_CONTEXT_METADATA(metadated_classname, SQLAlchemyContextType):
 
-    tname_prefix = f'META_NAMED_CTX'
+    tname_prefix = f'META_NAMED_CTX<{metadated_classname}>'
 
     class MetaDecl:
         
@@ -28,4 +28,4 @@ def NAMED_CONTEXT_METADATA(SQLAlchemyBaseType, SQLAlchemyContextType):
         "context": None    # already in MetaDecl for sqlalchemy reason
     }
 
-    return _META_SOMETHING(tname_prefix, columns, SQLAlchemyBaseType, MetaDecl)
+    return _META_SOMETHING(tname_prefix, columns, MetaDecl)

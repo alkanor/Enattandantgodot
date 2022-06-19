@@ -1,11 +1,11 @@
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy import Column, Integer, String, ForeignKey
-from sqlalchemy import and_, delete
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, ForeignKey, delete
+from sqlalchemy.orm import relationship, reconstructor
 
+from model._implem import BaseType, BaseChangeClassName
+from model.metadata import metaclass_for_sqlalchemy_with_subclass
 from model.type_system import register_type
 from model.base_type import STRING_SIZE
-from model._implem import BaseType
 
 
 class ALIAS_METADATA(BaseType):
@@ -40,58 +40,87 @@ def _update_metadata(session, aliastype):
 @register_type("ALIAS", lambda basetype, alias_name: (basetype.__tablename__, alias_name))
 def ALIAS(SQLAlchemyBaseType, alias_name):
 
-    class _ALIAS(BaseType):
+    is_base_sqlalchemy_type = SQLAlchemyBaseType.__dict__.get("id", None) is not None # this condition may not be the best to differentiate SQLAlchemy classes and non-sqlalchemy ones
+    base_type = SQLAlchemyBaseType if is_base_sqlalchemy_type else SQLAlchemyBaseType.__metadataclass__ # but this will throws an error if non SQLAlchemy class is not metadata one
+    have_get_method = SQLAlchemyBaseType.__dict__.get("GET_CREATE", None) is not None
 
-        __basetype__ = SQLAlchemyBaseType
+    class _ALIAS(BaseChangeClassName(SQLAlchemyBaseType), metaclass_for_sqlalchemy_with_subclass(base_type, "orm_obj")):
+
+        __basetype__ = base_type
         __tablename__ = alias_name
 
         id = Column(Integer, primary_key=True)
-        alias_id = Column(Integer, ForeignKey(SQLAlchemyBaseType.id), nullable=False)
+        alias_id = Column(Integer, ForeignKey(base_type.id), nullable=False)
 
         @declared_attr
-        def alias(cls):
-            return relationship(SQLAlchemyBaseType, foreign_keys=[cls.alias_id])
+        def orm_obj(cls):
+            return relationship(base_type, foreign_keys=[cls.alias_id])
 
-
+        # create an alias from an already existing element or a potential element:
+        #  - if the element already exists, either it is provided as the target, or it is gotten by GET_CREATE method of subtype, or manually if basic SQLAlchemy class
+        #  - if not, either it will fail if provided directly, or it will be created within the GET_CREATE, or manually if basic SQLAlchemy class (avoid it because not performant)
         def __init__(self, session, *args, **argv):
             _update_metadata(session, self.__class__)
             if args:
-                assert(type(args[0]) == self.__basetype__)
-                self.alias = args[0]
+                assert(type(args[0]) == SQLAlchemyBaseType or (not is_base_sqlalchemy_type and type(args[0]) == base_type))
+                if type(args[0]) == SQLAlchemyBaseType:
+                    self.target = args[0]
+                else: # the only possibility here is to have is_base_sqlalchemy_type = false, so base_type = metadata type and the provided argument is the metadata, so the orm obj
+                    self.orm_obj = args[0]
+                    self.target = SQLAlchemyBaseType(session, self.orm_obj)
             else:
-                self.alias = session.query(SQLAlchemyBaseType).filter_by(**argv).one_or_none()
+                if have_get_method:
+                    self.target = SQLAlchemyBaseType.GET_CREATE(session, **argv)
+                else:
+                    self.orm_obj = session.query(base_type).filter_by(**argv).one_or_none()
+                    if not self.orm_obj:
+                        print(base_type)
+                        self.orm_obj = base_type(**argv)
+                        session.add(self.orm_obj)
+                        session.commit()
+                    
+                    if is_base_sqlalchemy_type:
+                        self.target = self.orm_obj
+                    else:
+                        self.target = SQLAlchemyBaseType(session, self.orm_obj)
+
+            self.copy_aliased_attributes()
+            
+            super(_ALIAS, self).__init__(alias_id=self.target.id if is_base_sqlalchemy_type else self.target.metadata.id)
+
+        @reconstructor
+        def init_on_load(self):
+            if is_base_sqlalchemy_type:
+                assert(self.orm_obj.__class__ == SQLAlchemyBaseType)
+                self.target = self.orm_obj
+            else:
+                self.target = SQLAlchemyBaseType(session, self.orm_obj)
+            self.copy_aliased_attributes()
+        
+        def copy_aliased_attributes(self):
+            print("start here {self}")
+            for k, v in self.target.__dict__.items():
+                if k not in self.__dict__ and k != 'id':
+                    setattr(self, k, v)
+                    print(f"Attr {k} not in new obj, adding it => {v}")
 
         def __repr__(self):
-            return f'ALIAS [{self.alias}]'
-
-
-        @classmethod
-        def GET(cls, session, **argv):
-            if not SQLAlchemyBaseType.GET(session, **argv):
-                return None
-            else:
-                return cls(session, **argv)
+            return f'ALIAS ({alias_name}, id={self.id}) [{self.target}]'
         
-        @classmethod
-        def GET_CREATE(cls, session, **argv):
-            return cls(session, **argv)
+        def clear(self, session):
+            print(self)
+            print(list(session.query(_ALIAS).where(_ALIAS.id == self.id).all()))
+            statement = delete(_ALIAS).where(_ALIAS.alias_id == self.alias_id)
+            session.execute(statement)
+            session.commit()
+            print(list(session.query(_ALIAS).where(_ALIAS.alias_id == self.alias_id).all()))
 
-        @classmethod
-        def NEW(cls, session, **argv):
-            new_alias = SQLAlchemyBaseType.NEW(session, **argv)
-            return cls(session, new_alias)
-
-        @classmethod
-        def DELETE(cls, session, **argv):
-            existing = cls.GET(session, **argv)
-            if existing is None:
-                return
-            SQLAlchemyBaseType.DELETE(session, **argv)
-                
-        @classmethod
-        def GET_COND(cls, session, condition):
-            from_basetype = SQLAlchemyBaseType.GET_COND(session, condition)
-            return list([cls(session, b) for b in from_basetype])
+    
+    # copying the target attributes for calling them on the alias
+    for attr in SQLAlchemyBaseType.__dict__:
+        if attr not in dir(_ALIAS) and attr != 'id':
+            print(f"Attr {attr} not in new obj, adding it => {SQLAlchemyBaseType.__dict__[attr]}")
+            setattr(_ALIAS, attr, SQLAlchemyBaseType.__dict__[attr])
 
     return _ALIAS
 
@@ -101,8 +130,10 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import _String, BasicEntity, STRING_SIZE
+    from model.base_type import BasicEntity, STRING_SIZE
 
+    from sqlalchemy.orm.exc import FlushError
+    from sqlalchemy.exc import IntegrityError, InvalidRequestError
     from sqlalchemy import String
 
 
@@ -116,18 +147,44 @@ if __name__ == "__main__":
 
     session = create_session()
 
-    v1 = Test.GET_CREATE(session, xx="jour1")
-    v2 = Test.GET_CREATE(session, xx="jour2")
-    v3 = Test.GET_CREATE(session, xx="jour3")
-    v4 = Test.GET_CREATE(session, xx="jour4")
-
-
     HOST = ALIAS(Test, "HOST")
 
+    v1 = HOST.GET_CREATE(session, vv="jour1")
+    v2 = HOST.GET_CREATE(session, vv="jour2")
+    v3 = HOST.GET_CREATE(session, vv="jour3")
+    v4 = HOST.GET_CREATE(session, vv="jour4")
+    v5 = Test.GET_CREATE(session, vv="jour5")
+
     host1 = HOST(session, vv="12")
-    host2 = HOST(session, vv="12", xx=1020)
+    try:
+        host2 = HOST(session, vv="12", xx=1020)
+        raise Exception("Should not happen")
+    except IntegrityError as e:
+        session.rollback()
+        print("adding element vv=12,xx=1020 is not ok since searching it returns none and adding it break unicity constraint for v=12")
     host3 = HOST(session, vv="12")
 
+    try:
+        session.add(host1)
+        #session.add(host3) # returned the same as host1
+        session.commit()
+    except:
+        print("If failed here, maybe because host was added previously")
+        session.rollback()
+
+    print(host1.vv)
+    print(host1.xx)
+
+    print(v1, v2, v3, v4, v5)
+
+    from_bad = HOST(session, v5)
+    print(from_bad)
+    try:
+        session.add(from_bad)
+        session.commit()
+    except IntegrityError as e:
+        session.rollback()
+        print("May have been previously added")
 
     from .list import LIST
 
@@ -137,7 +194,45 @@ if __name__ == "__main__":
     mylist1 = HOSTLIST(session, name="superlist1")
     mylist2 = HOSTLIST(session, name="superlist2")
 
-    print(_alias_cache)
-    list1 = HOST_GROUP(session, name="mylist")
-    print(_alias_cache)
+    hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylist")
+    hostgroup2 = HOST_GROUP.GET_CREATE(session, name="mylist")
+    hostgroup3 = HOST_GROUP.GET_CREATE(session, name="mylist2")
 
+    mylist1.add(session, HOST(session, vv="jourXX"))
+    hostgroup1.add(session, v1)
+    try:
+        hostgroup1.add(session, v5)
+        raise Exception("Should not happen")
+    except AssertionError as e:
+        #session.rollback()
+        print("adding Test element instead of HOST is nok ok because of type coherence")
+
+    hostgroup2.add_many(session, [v1, v2, v4])
+    print(hostgroup1)
+    print(hostgroup2)
+
+    hostgroup3.add(session, v1)
+    print(hostgroup3)
+
+    print("oooooooooooooooooooooo")
+    print(hostgroup1.id)
+    HOST_GROUP.DELETE(session, id=hostgroup1.id)
+    exit()
+    print(hostgroup1)
+    print(hostgroup2)
+
+    print(HOST_GROUP.GET(session, name="mylist"))
+
+    exit()
+
+    try:
+        hostgroup1.add_many(session, [v1, v2])
+        raise Exception("Should not happen")
+    except InvalidRequestError:
+        print("Cannot add many to hostgroup1 as it has been deleted")
+        session.rollback()
+    
+    hostgroup3.add_many(session, [v3, v4])
+
+    print(hostgroup2)
+    print(hostgroup3)

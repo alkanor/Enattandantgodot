@@ -21,3 +21,22 @@ class MetaCreateTableWhenEngine(DeclarativeMeta):
 
 BaseCreateTableWhenEngine = declarative_base(metaclass = MetaCreateTableWhenEngine)
 sql_bases.append(BaseCreateTableWhenEngine)
+
+
+_cached_classes = {}
+
+def BaseChangeClassName(*SQLAlchemyObjects):
+
+    classname = "_".join(map(lambda x: x.__tablename__, SQLAlchemyObjects))
+    if _cached_classes.get(classname):
+        return _cached_classes[classname]
+
+    class MetaclassChangeName(MetaCreateTableWhenEngine):
+
+        def __init__(self, name, bases, dict):
+            super(MetaclassChangeName, self).__init__(name+"_"+classname, (Base, ), dict)
+
+    _BaseChangeClassName = declarative_base(metaclass = MetaclassChangeName)
+    _cached_classes[classname] = _BaseChangeClassName
+    sql_bases.append(_BaseChangeClassName)
+    return _BaseChangeClassName

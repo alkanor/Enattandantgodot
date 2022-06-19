@@ -1,0 +1,2 @@
+from .metaclass_sqlalch_attr import metaclass_for_sqlalchemy_with_subclass
+from .metadated_type import metaclass_for_metadata

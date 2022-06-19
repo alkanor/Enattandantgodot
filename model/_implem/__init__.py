@@ -1,1 +1,1 @@
-from .base import BaseCreateTableWhenEngine as BaseType, MetaCreateTableWhenEngine as BaseMetaType
+from .base import BaseCreateTableWhenEngine as BaseType, MetaCreateTableWhenEngine as BaseMetaType, BaseChangeClassName

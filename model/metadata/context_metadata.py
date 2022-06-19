@@ -5,16 +5,16 @@ from sqlalchemy.orm import relationship
 from ._metadata_meta import _META_SOMETHING
 
 
-def CONTEXT_METADATA(SQLAlchemyBaseType, SQLAlchemyContextType):
+def CONTEXT_METADATA(metadated_classname, SQLAlchemyContextType):
 
-    tname_prefix = f'META_CTX'
+    tname_prefix = f'META_CTX<{metadated_classname}>'
 
     class MetaDecl:
         
         @declared_attr
         def contextid(cls):
             return Column(Integer, ForeignKey(SQLAlchemyContextType.id), nullable=False)
-        
+
         @declared_attr
         def context(cls):
             return relationship(SQLAlchemyContextType, foreign_keys=[cls.contextid])
@@ -25,7 +25,7 @@ def CONTEXT_METADATA(SQLAlchemyBaseType, SQLAlchemyContextType):
         "context": None    # already in MetaDecl for sqlalchemy reason
     }
 
-    return _META_SOMETHING(tname_prefix, columns, SQLAlchemyBaseType, MetaDecl)
+    return _META_SOMETHING(tname_prefix, columns, MetaDecl)
 
 
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         v1 = Test.GET_CREATE(session, value="bonjour")
     
 
-    CTX_STRING = CONTEXT_METADATA(_String, Test)
+    CTX_STRING = CONTEXT_METADATA(Test.__tablename__, Test)
 
     print(CTX_STRING.GET(session, context=v1))
     print(CTX_STRING.GET_CREATE(session, context=v2))
