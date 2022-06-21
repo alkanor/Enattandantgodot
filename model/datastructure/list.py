@@ -1,7 +1,7 @@
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy import and_, delete
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, reconstructor
 
 from model.metadata.named_date_metadata import NAMED_DATE_METADATA
 from model._implem import BaseType, BaseChangeClassName
@@ -71,11 +71,37 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
                 self.metadata = args[0]
             else:
                 self.metadata = MetadataClass.GET_CREATE(session, **argv)
-            self.entries = session.query(_LIST_ENTRY).filter_by(metadata_id=self.metadata.id).all()
-        
+            self.entries_initialized = False
+            self._entries = []
+            self._session_saved = session
+
+
+        @reconstructor
+        def init_on_load(self):
+            self.entries_initialized = False
+            self._entries = []
+
+        # lazy load list entries when needed, otherwise only the metadata suffices
+        @property
+        def entries(self):
+            if not self.entries_initialized:
+                self.entries_initialized = True
+                self._entries = self._session_saved.query(_LIST_ENTRY).filter_by(metadata_id=self.metadata.id).all()
+            return self._entries
+	
+        @entries.setter
+        def entries(self, new_entries):
+            self._entries = new_entries
+
+        @entries.deleter
+        def entries(self):
+            self.entries_initialized = False
+            self.entries = []
+
 
         def add(self, session, element, commit=True):
             assert(element.__class__ == SQLAlchemyBaseType)
+            self._session_saved = session
             if element.id:
                 new_item = _LIST_ENTRY(metadataobj=self.metadata, entry_id=element.id)
             else:
@@ -88,6 +114,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
         
         def add_many(self, session, elements, commit=True, commit_every_n=10000):
             assert(all([element.__class__ == SQLAlchemyBaseType for element in elements]))
+            self._session_saved = session
             for i, element in enumerate(elements):
                 if element.id:
                     new_item = _LIST_ENTRY(metadataobj=self.metadata, entry_id=element.id)
@@ -103,6 +130,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
         def delete(self, session, element):
             assert(any(map(lambda x: x.entry_id == element.id, self.entries)))
             assert(element.__class__ == SQLAlchemyBaseType)
+            self._session_saved = session
             statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id == element.id))
             session.execute(statement)
             session.commit()
@@ -113,6 +141,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             elements_id = set(map(lambda x: x.id, elements))
             assert(entries_id.intersection(elements_id) == elements_id)
             assert(all(map(lambda x: x.__class__ == SQLAlchemyBaseType, elements)))
+            self._session_saved = session
             for i in range(0, len(elements), cut_by_chunks):
                 statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id, _LIST_ENTRY.entry_id.in_(list(map(lambda x: x.id, elements[i:i+cut_by_chunks])))))
                 session.execute(statement)
@@ -120,6 +149,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             self.entries = [x for x in self.entries if x.entry_id not in elements_id]
 
         def clear(self, session):
+            self._session_saved = session
             statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id))
             session.execute(statement)
             session.commit()

@@ -62,19 +62,30 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
         def __init__(self, session, *args, **argv):
             _update_metadata(session, self.__class__)
             if args:
+                print("args")
+                print(args, args[0], type(args[0]))
                 assert(type(args[0]) == SQLAlchemyBaseType or (not is_base_sqlalchemy_type and type(args[0]) == base_type))
                 if type(args[0]) == SQLAlchemyBaseType:
+                    print("BASE")
                     self.target = args[0]
+                    self.orm_obj = self.target.metadata
                 else: # the only possibility here is to have is_base_sqlalchemy_type = false, so base_type = metadata type and the provided argument is the metadata, so the orm obj
                     self.orm_obj = args[0]
                     self.target = SQLAlchemyBaseType(session, self.orm_obj)
+                    print("NOT BASE")
+                    print(self.target)
+                    print(self.target.metadata)
             else:
                 if have_get_method:
-                    self.target = SQLAlchemyBaseType.GET_CREATE(session, **argv)
+                    print("here")
+                    self.orm_obj = SQLAlchemyBaseType.GET_CREATE(session, **argv)
+                    self.target = self.orm_obj
                 else:
+                    print("last case")
+                    print(SQLAlchemyBaseType, base_type, argv)
                     self.orm_obj = session.query(base_type).filter_by(**argv).one_or_none()
+                    print(self.orm_obj)
                     if not self.orm_obj:
-                        print(base_type)
                         self.orm_obj = base_type(**argv)
                         session.add(self.orm_obj)
                         session.commit()
@@ -98,16 +109,17 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
             self.copy_aliased_attributes()
         
         def copy_aliased_attributes(self):
-            print("start here {self}")
+            print(f"start here {self}")
             for k, v in self.target.__dict__.items():
                 if k not in self.__dict__ and k != 'id':
                     setattr(self, k, v)
-                    print(f"Attr {k} not in new obj, adding it => {v}")
+                    #print(f"Attr {k} not in new obj, adding it => {v}")
 
         def __repr__(self):
             return f'ALIAS ({alias_name}, id={self.id}) [{self.target}]'
         
         def clear(self, session):
+            print("cleaaaaarrr")
             print(self)
             print(list(session.query(_ALIAS).where(_ALIAS.id == self.id).all()))
             statement = delete(_ALIAS).where(_ALIAS.alias_id == self.alias_id)
@@ -119,7 +131,7 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
     # copying the target attributes for calling them on the alias
     for attr in SQLAlchemyBaseType.__dict__:
         if attr not in dir(_ALIAS) and attr != 'id':
-            print(f"Attr {attr} not in new obj, adding it => {SQLAlchemyBaseType.__dict__[attr]}")
+            #print(f"Attr {attr} not in new obj, adding it => {SQLAlchemyBaseType.__dict__[attr]}")
             setattr(_ALIAS, attr, SQLAlchemyBaseType.__dict__[attr])
 
     return _ALIAS
@@ -194,7 +206,10 @@ if __name__ == "__main__":
     mylist1 = HOSTLIST(session, name="superlist1")
     mylist2 = HOSTLIST(session, name="superlist2")
 
+    print("OOOOOOOOOOOOOOOOOOOOOOOOOOO")
     hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylist")
+    print(hostgroup1)
+    exit()
     hostgroup2 = HOST_GROUP.GET_CREATE(session, name="mylist")
     hostgroup3 = HOST_GROUP.GET_CREATE(session, name="mylist2")
 
