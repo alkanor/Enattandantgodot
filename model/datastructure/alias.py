@@ -62,29 +62,22 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
         def __init__(self, session, *args, **argv):
             _update_metadata(session, self.__class__)
             if args:
-                print("args")
-                print(args, args[0], type(args[0]))
                 assert(type(args[0]) == SQLAlchemyBaseType or (not is_base_sqlalchemy_type and type(args[0]) == base_type))
                 if type(args[0]) == SQLAlchemyBaseType:
-                    print("BASE")
                     self.target = args[0]
-                    self.orm_obj = self.target.metadata
+                    self.orm_obj = self.target
                 else: # the only possibility here is to have is_base_sqlalchemy_type = false, so base_type = metadata type and the provided argument is the metadata, so the orm obj
                     self.orm_obj = args[0]
                     self.target = SQLAlchemyBaseType(session, self.orm_obj)
-                    print("NOT BASE")
-                    print(self.target)
-                    print(self.target.metadata)
             else:
                 if have_get_method:
-                    print("here")
-                    self.orm_obj = SQLAlchemyBaseType.GET_CREATE(session, **argv)
-                    self.target = self.orm_obj
+                    self.target = SQLAlchemyBaseType.GET_CREATE(session, **argv)
+                    if is_base_sqlalchemy_type:
+                        self.orm_obj = self.target
+                    else:
+                        self.orm_obj = self.target.metadata
                 else:
-                    print("last case")
-                    print(SQLAlchemyBaseType, base_type, argv)
                     self.orm_obj = session.query(base_type).filter_by(**argv).one_or_none()
-                    print(self.orm_obj)
                     if not self.orm_obj:
                         self.orm_obj = base_type(**argv)
                         session.add(self.orm_obj)
@@ -109,7 +102,6 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
             self.copy_aliased_attributes()
         
         def copy_aliased_attributes(self):
-            print(f"start here {self}")
             for k, v in self.target.__dict__.items():
                 if k not in self.__dict__ and k != 'id':
                     setattr(self, k, v)
@@ -117,17 +109,12 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
 
         def __repr__(self):
             return f'ALIAS ({alias_name}, id={self.id}) [{self.target}]'
-        
+
         def clear(self, session):
-            print("cleaaaaarrr")
-            print(self)
-            print(list(session.query(_ALIAS).where(_ALIAS.id == self.id).all()))
             statement = delete(_ALIAS).where(_ALIAS.alias_id == self.alias_id)
             session.execute(statement)
             session.commit()
-            print(list(session.query(_ALIAS).where(_ALIAS.alias_id == self.alias_id).all()))
 
-    
     # copying the target attributes for calling them on the alias
     for attr in SQLAlchemyBaseType.__dict__:
         if attr not in dir(_ALIAS) and attr != 'id':
@@ -206,10 +193,7 @@ if __name__ == "__main__":
     mylist1 = HOSTLIST(session, name="superlist1")
     mylist2 = HOSTLIST(session, name="superlist2")
 
-    print("OOOOOOOOOOOOOOOOOOOOOOOOOOO")
     hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylist")
-    print(hostgroup1)
-    exit()
     hostgroup2 = HOST_GROUP.GET_CREATE(session, name="mylist")
     hostgroup3 = HOST_GROUP.GET_CREATE(session, name="mylist2")
 
@@ -229,16 +213,14 @@ if __name__ == "__main__":
     hostgroup3.add(session, v1)
     print(hostgroup3)
 
-    print("oooooooooooooooooooooo")
-    print(hostgroup1.id)
+    # delete alias then clear the associated object (fk needs to be cleared)
     HOST_GROUP.DELETE(session, id=hostgroup1.id)
-    exit()
+    hostgroup1.target.clear(session)
+
     print(hostgroup1)
     print(hostgroup2)
 
     print(HOST_GROUP.GET(session, name="mylist"))
-
-    exit()
 
     try:
         hostgroup1.add_many(session, [v1, v2])
@@ -246,6 +228,20 @@ if __name__ == "__main__":
     except InvalidRequestError:
         print("Cannot add many to hostgroup1 as it has been deleted")
         session.rollback()
+
+    hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylistX")
+    HOST_GROUP.DELETE(session, hostgroup1)
+    print(hostgroup1)
+
+    hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylistY")
+    HOST_GROUP.DELETE(session, hostgroup1.metadata)
+    print(hostgroup1)
+
+    hostgroup1 = HOST_GROUP.GET_CREATE(session, name="mylistZ")
+    metadata_from_other = session.query(hostgroup1.target.__metadataclass__).filter_by(id=hostgroup1.target.metadata.id).one_or_none()
+    print(metadata_from_other)
+    HOST_GROUP.DELETE(session, metadata_from_other)
+    print(hostgroup1)
     
     hostgroup3.add_many(session, [v3, v4])
 

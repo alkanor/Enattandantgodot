@@ -5,7 +5,13 @@ from model._implem import BaseMetaType
 from model.general import sql_bases
 
 
+cache = {}
+
 def BaseDictToAttrs(attr_dict):
+    cache_key = str(sorted(attr_dict.items()))
+
+    if cache_key in cache:
+        return cache[cache_key]
 
     class MetaClassDictToAttrs(BaseMetaType):
 
@@ -16,13 +22,19 @@ def BaseDictToAttrs(attr_dict):
     BaseFromDict = declarative_base(metaclass = MetaClassDictToAttrs)
     sql_bases.append(BaseFromDict)
 
-    return BaseFromDict
+    cache[cache_key] = BaseFromDict, MetaClassDictToAttrs
+
+    return cache[cache_key]
 
 
-def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
+def BasicEntity(tablename, columns_dict, ToInheritAdditional=None, slug=None, MetaAdditional=None):
 
-    class _BasicEntity(BaseDictToAttrs(columns_dict), MetaAdditional if MetaAdditional else object):
-        
+    additional_metadict = {}
+    if MetaAdditional:
+        additional_metadict["metaclass"] = MetaAdditional
+
+    class _BasicEntity(BaseDictToAttrs(columns_dict)[0], ToInheritAdditional if ToInheritAdditional else object, **additional_metadict):
+
         __tablename__ = tablename
         __slug__ = slug
 
@@ -37,7 +49,7 @@ def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
                 return result[0]
             else:
                 return None if not result else result
-        
+
         @classmethod
         def GET_CREATE(cls, session, **argv):
             existing = cls.GET(session, **argv)
@@ -69,13 +81,13 @@ def BasicEntity(tablename, columns_dict, MetaAdditional=None, slug=None):
                 for x in existing:
                     session.delete(x)
             session.commit()
-                
+
         @classmethod
         def GET_COND(cls, session, condition):
             return session.query(cls).filter(condition).all()
-        
+
         def __repr__(self):
             textual = ' - '.join(map(lambda x: x + " " + repr(getattr(self, x)), columns_dict))
-            return f'{self.__tablename__} : {textual}'
+            return f'{self.__tablename__} : [{textual}]'
 
     return _BasicEntity

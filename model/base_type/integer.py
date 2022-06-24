@@ -8,3 +8,6 @@ class Integer(BaseType):
     __tablename__ = f'integer'
 
     id = Column(_Integer, primary_key=True)
+
+    def __repr__(self):
+        return f'{self.id}'

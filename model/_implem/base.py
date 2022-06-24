@@ -27,7 +27,7 @@ _cached_classes = {}
 
 def BaseChangeClassName(*SQLAlchemyObjects):
 
-    classname = "_".join(map(lambda x: x.__tablename__, SQLAlchemyObjects))
+    classname = "_".join(sorted(map(lambda x: x.__tablename__, SQLAlchemyObjects)))
     if _cached_classes.get(classname):
         return _cached_classes[classname]
 

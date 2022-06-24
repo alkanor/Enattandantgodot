@@ -9,7 +9,7 @@ def CONTEXT_METADATA(metadated_classname, SQLAlchemyContextType):
 
     tname_prefix = f'META_CTX<{metadated_classname}>'
 
-    class MetaDecl:
+    class ToInherit:
         
         @declared_attr
         def contextid(cls):
@@ -21,11 +21,11 @@ def CONTEXT_METADATA(metadated_classname, SQLAlchemyContextType):
 
     columns = {
         "id": Column(Integer, primary_key=True),
-        "contextid": None, # already in MetaDecl for sqlalchemy reason
-        "context": None    # already in MetaDecl for sqlalchemy reason
+        "contextid": None, # already in ToInherit for sqlalchemy reason
+        "context": None    # already in ToInherit for sqlalchemy reason
     }
 
-    return _META_SOMETHING(tname_prefix, columns, MetaDecl)
+    return _META_SOMETHING(tname_prefix, columns, ToInherit)
 
 
 

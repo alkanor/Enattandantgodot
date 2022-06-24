@@ -191,7 +191,12 @@ if __name__ == "__main__":
 
     before = session.query(LIST_TYPE.__metadataclass__).all()
     print(before)
-    [LIST_TYPE.DELETE(session, i) for i in before]
+    for i in before:
+        try:
+            LIST_TYPE.DELETE(session, i)
+        except Exception as e:
+            session.rollback()
+            print(f"No delete {e}")
 
 
     mylist1 = LIST_TYPE(session, name="superlist1")

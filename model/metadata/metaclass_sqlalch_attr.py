@@ -7,35 +7,22 @@ def metaclass_for_sqlalchemy_with_subclass(SubClass, sub_ormobj_name=None, commi
 
         @classmethod
         def GET(cls, session, **argv):
-            does_exist = session.query(cls.__metadataclass__).filter_by(**argv).one_or_none()
-            if does_exist:
-                return cls(session, does_exist)
-            else:
-                return cls(session, **argv)
+            if 'id' in argv and len(argv) == 1:
+                fullobj_exist = session.query(cls).filter_by(**argv).one_or_none()
+                return fullobj_exist
 
-        @classmethod
-        def GET_FROM_SUB(cls, session, **argv):
-            subobj = cls.GET(session, **argv)
-            if not subobj:
-                return None
-
-            if sub_ormobj_name:
-                print(sub_ormobj_name, getattr(subobj, sub_ormobj_name))
-                print("IS EXIST")
-                print(subobj)
-                does_exist = session.query(cls).filter(getattr(subobj, sub_ormobj_name) == subobj).one_or_none()
-                if does_exist:
-                    return does_exist
-
-            return subobj
+            target_obj_exist = session.query(cls.__metadataclass__).filter_by(**argv).one_or_none()
+            if target_obj_exist:
+                fullobj_exist = session.query(cls).filter(getattr(cls, sub_ormobj_name) == target_obj_exist).one_or_none()
+                if fullobj_exist:
+                    return fullobj_exist
+                return cls(session, target_obj_exist)
+            return None
         
         @classmethod
         def GET_CREATE(cls, session, **argv):
-            base_obj = cls.GET_FROM_SUB(session, **argv)
-            print("BASCASE")
+            base_obj = cls.GET(session, **argv)
             if base_obj:
-                print("NEXTCSE")
-                print(base_obj)
                 if commit and base_obj.id is None: # check if the subclass has no related persistent data (id == none) and commit if available
                     #session.add(base_obj.metadata)
                     session.add(base_obj)
@@ -61,13 +48,12 @@ def metaclass_for_sqlalchemy_with_subclass(SubClass, sub_ormobj_name=None, commi
                 if to_delete.__class__ != cls:
                     if not element.id:
                         return
-                    to_delete = cls.GET_FROM_SUB(session, id=element.id)
+                    to_delete = session.query(cls).filter(getattr(cls, sub_ormobj_name) == element).one_or_none()
             else:
-                to_delete = cls.GET_FROM_SUB(session, **argv)
-                print("DELETING")
-                print(to_delete)
-                if to_delete is None:
-                    return
+                to_delete = cls.GET(session, **argv)
+
+            if not to_delete:
+                return
             to_delete.clear(session)
                 
         @classmethod
