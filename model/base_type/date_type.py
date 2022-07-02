@@ -1,10 +1,12 @@
 from sqlalchemy import Column, DateTime
 
-from model._implem import BaseType
+from model.base import Base
+
+from .common import CommonMethodBase
 
 
-class Date(BaseType):
+class Date(Base, CommonMethodBase):
 
-    __tablename__ = f'datetime'
+    __tablename__ = 'datetime'
 
     id = Column(DateTime, primary_key=True)

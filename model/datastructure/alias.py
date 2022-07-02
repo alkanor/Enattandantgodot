@@ -2,13 +2,12 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, String, ForeignKey, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from model._implem import BaseType, BaseChangeClassName
-from model.metadata import metaclass_for_sqlalchemy_with_subclass
+from model.base import Base, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
 from model.type_system import register_type
 from model.base_type import STRING_SIZE
 
 
-class ALIAS_METADATA(BaseType):
+class ALIAS_METADATA(Base):
 
     __tablename__ = "alias"
 
@@ -44,13 +43,13 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
     base_type = SQLAlchemyBaseType if is_base_sqlalchemy_type else SQLAlchemyBaseType.__metadataclass__ # but this will throws an error if non SQLAlchemy class is not metadata one
     have_get_method = SQLAlchemyBaseType.__dict__.get("GET_CREATE", None) is not None
 
-    class _ALIAS(BaseChangeClassName(SQLAlchemyBaseType), metaclass_for_sqlalchemy_with_subclass(base_type, "orm_obj")):
+    class _ALIAS(BaseAndMetaChangeClassName(SQLAlchemyBaseType)[0], baseclass_for_sqlalchemy_with_subclass(base_type, "orm_obj")):
 
         __basetype__ = base_type
         __tablename__ = alias_name
 
         id = Column(Integer, primary_key=True)
-        alias_id = Column(Integer, ForeignKey(base_type.id), nullable=False)
+        alias_id = Column(Integer, ForeignKey(base_type.id), nullable=False, unique=True)
 
         @declared_attr
         def orm_obj(cls):
@@ -131,7 +130,6 @@ if __name__ == "__main__":
     from model_to_disk import create_session
     from model.base_type import BasicEntity, STRING_SIZE
 
-    from sqlalchemy.orm.exc import FlushError
     from sqlalchemy.exc import IntegrityError, InvalidRequestError
     from sqlalchemy import String
 
@@ -197,7 +195,7 @@ if __name__ == "__main__":
     hostgroup2 = HOST_GROUP.GET_CREATE(session, name="mylist")
     hostgroup3 = HOST_GROUP.GET_CREATE(session, name="mylist2")
 
-    mylist1.add(session, HOST(session, vv="jourXX"))
+    mylist1.add(session, HOST.GET_CREATE(session, vv="jourXX"))
     hostgroup1.add(session, v1)
     try:
         hostgroup1.add(session, v5)

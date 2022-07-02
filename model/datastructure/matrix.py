@@ -3,8 +3,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from model._implem import BaseType, BaseChangeClassName
-from model.metadata import metaclass_for_metadata
+from model.base import BaseType, BaseChangeClassName
+from model.metadata import baseclass_for_metadata
 from model.type_system import register_type
 from model.base_type import STRING_SIZE
 

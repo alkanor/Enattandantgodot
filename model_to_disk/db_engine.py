@@ -21,7 +21,7 @@ def create_engine():
     from sqlalchemy import event
     event.listen(db_engine, 'connect', _fk_pragma_on_connect)
 
-    from model.general import sql_bases
+    from model.base import sql_bases
     # create all currently existing metadata for declared bases
     (*map(lambda x: x.metadata.create_all(db_engine), sql_bases), )
 

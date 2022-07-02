@@ -1,10 +1,12 @@
 from sqlalchemy import Column, Text as _Text
 
-from model._implem import BaseType
+from model.base import Base
+
+from .common import CommonMethodBase
 
 
-class Text(BaseType):
+class Text(Base, CommonMethodBase):
 
-    __tablename__ = f'text'
+    __tablename__ = 'text'
 
     id = Column(_Text, primary_key=True)

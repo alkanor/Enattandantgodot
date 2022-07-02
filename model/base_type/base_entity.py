@@ -1,39 +1,20 @@
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
-from model._implem import BaseMetaType
-from model.general import sql_bases
+from model.base import BaseAndMetaFromAttrDict
 
 
-cache = {}
+def BasicEntity(tablename, columns_dict, ToInherit=None, slug=None):
+    if ToInherit:
+        if isinstance(ToInherit, list):
+            bases = ToInherit
+        else:
+            bases = [ToInherit]
+    else:
+        bases = [BaseAndMetaFromAttrDict(columns_dict)[0]]
 
-def BaseDictToAttrs(attr_dict):
-    cache_key = str(sorted(attr_dict.items()))
+    every_repr = [b for b in bases if "__repr__" in b.__dict__]
 
-    if cache_key in cache:
-        return cache[cache_key]
-
-    class MetaClassDictToAttrs(BaseMetaType):
-
-        def __init__(self, name, bases, dict):
-            dict.update({k: v for k, v in attr_dict.items() if v is not None})
-            super(MetaClassDictToAttrs, self).__init__(name, bases, dict)
-
-    BaseFromDict = declarative_base(metaclass = MetaClassDictToAttrs)
-    sql_bases.append(BaseFromDict)
-
-    cache[cache_key] = BaseFromDict, MetaClassDictToAttrs
-
-    return cache[cache_key]
-
-
-def BasicEntity(tablename, columns_dict, ToInheritAdditional=None, slug=None, MetaAdditional=None):
-
-    additional_metadict = {}
-    if MetaAdditional:
-        additional_metadict["metaclass"] = MetaAdditional
-
-    class _BasicEntity(BaseDictToAttrs(columns_dict)[0], ToInheritAdditional if ToInheritAdditional else object, **additional_metadict):
+    class _BasicEntity(*bases):
 
         __tablename__ = tablename
         __slug__ = slug
@@ -87,7 +68,10 @@ def BasicEntity(tablename, columns_dict, ToInheritAdditional=None, slug=None, Me
             return session.query(cls).filter(condition).all()
 
         def __repr__(self):
-            textual = ' - '.join(map(lambda x: x + " " + repr(getattr(self, x)), columns_dict))
-            return f'{self.__tablename__} : [{textual}]'
+            if every_repr:
+                return "\n".join([repr_cls.__dict__['__repr__'](self) for repr_cls in every_repr])
+            else:
+                textual = ' - '.join(map(lambda x: x + " " + repr(getattr(self, x)), columns_dict))
+                return f'{self.__tablename__} : [{textual}]'
 
     return _BasicEntity

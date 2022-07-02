@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.sql import func
 
 from model.base_type import STRING_SIZE
 

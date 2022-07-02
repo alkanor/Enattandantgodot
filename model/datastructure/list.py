@@ -1,11 +1,11 @@
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy import and_, delete
-from sqlalchemy.orm import relationship, reconstructor
+from sqlalchemy.orm import relationship
 
 from model.metadata.named_date_metadata import NAMED_DATE_METADATA
-from model._implem import BaseType, BaseChangeClassName
-from model.metadata import metaclass_for_metadata
+from model.base import Base, BaseAndMetaChangeClassName
+from model.metadata import baseclass_for_metadata
 from model.type_system import register_type
 
 
@@ -38,7 +38,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
     assert(metaclass_tablename == MetadataClass.__tablename__)
 
 
-    class _LIST_ENTRY(BaseChangeClassName(SQLAlchemyBaseType, MetadataClass)):
+    class _LIST_ENTRY(BaseAndMetaChangeClassName(SQLAlchemyBaseType, MetadataClass)[0]):
 
         __tablename__ = entrytype_tablename
         __basetype__ = SQLAlchemyBaseType
@@ -59,7 +59,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             return f'{self.entry}'
 
 
-    class _LIST(metaclass_for_metadata(MetadataClass)):
+    class _LIST(baseclass_for_metadata(MetadataClass)):
 
         __entrytype__ = _LIST_ENTRY
         __tablename__ = entrytype_tablename # not a real SQLAlchemy table but to ease table creation
@@ -76,11 +76,6 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
             self._session_saved = session
 
 
-        @reconstructor
-        def init_on_load(self):
-            self.entries_initialized = False
-            self._entries = []
-
         # lazy load list entries when needed, otherwise only the metadata suffices
         @property
         def entries(self):
@@ -88,7 +83,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
                 self.entries_initialized = True
                 self._entries = self._session_saved.query(_LIST_ENTRY).filter_by(metadata_id=self.metadata.id).all()
             return self._entries
-	
+
         @entries.setter
         def entries(self, new_entries):
             self._entries = new_entries

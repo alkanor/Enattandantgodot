@@ -1,12 +1,8 @@
-from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy import Column, Integer, ForeignKey
-from sqlalchemy import and_, delete
-from sqlalchemy.orm import relationship, reconstructor
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship, declared_attr
 
-from model.metadata.named_date_metadata import NAMED_DATE_METADATA
-from model.base_type.base_entity import BaseDictToAttrs
-from model._implem import BaseType, BaseChangeClassName
-from model.metadata import metaclass_for_metadata
+from model.base import sql_bases, BaseAndMetaFromAttrDict, BaseAndMetaChangeClassName
 from model.type_system import register_type
 
 
@@ -16,17 +12,6 @@ __objectname__ = "TUPLE"
 def _LIST_DEPENDANCIES(*SQLAlchemyBaseTypes):
 
     return map(lambda x: x.__tablename__, SQLAlchemyBaseTypes)
-
-
-from model.base_type import BasicEntity
-
-
-def _META_SOMETHING(metaname, columns_dict, MetaAdditional=None):
-
-    return BasicEntity(metaname, columns_dict, MetaAdditional, metaname.split('<')[0])
-
-from model.general import sql_bases
-from sqlalchemy.ext.declarative import declarative_base
 
 
 @register_type(__objectname__, _LIST_DEPENDANCIES)
@@ -40,45 +25,42 @@ def TUPLE(*SQLAlchemyBaseTypes):
         **{f"elem{i}": None for i, t in enumerate(SQLAlchemyBaseTypes)},     # already in AddDeclAttrMetaclass for sqlalchemy reason
     }
     repr_cols = ["id", *(f"elem{i}" for i in range(len(SQLAlchemyBaseTypes)))]
-    print(columns)
 
-    new_base, meta_base = BaseDictToAttrs(columns)
+    _, meta_base = BaseAndMetaFromAttrDict(columns, BaseAndMetaChangeClassName(*SQLAlchemyBaseTypes)[1])
+
+    def relationship_col(i):
+        def sub(cls):
+            return relationship(getattr(cls, f"elem{i}_type"), foreign_keys=[getattr(cls, f"elem{i}_id")])
+        return sub
 
     class AddDeclAttrMetaclass(meta_base):
 
-        def __init__(self, name, bases, dict):
-            print(dict)
+        def __new__(cls, name, bases, dict):
             for i, base_type in enumerate(SQLAlchemyBaseTypes):
+                dict.update({f"elem{i}_type": base_type})
                 dict.update({f"elem{i}_id": Column(Integer, ForeignKey(base_type.id), nullable=False)})
-            for i, base_type in enumerate(SQLAlchemyBaseTypes):
-                dict.update({f"elem{i}": relationship(base_type, foreign_keys=[dict[f"elem{i}_id"]])})
-            super(AddDeclAttrMetaclass, self).__init__(name, bases, dict)
+                dict.update({f"elem{i}": declared_attr(relationship_col(i))})
+            dict["__table_args__"] = (UniqueConstraint(*[f"elem{i}_id" for i in range(len(SQLAlchemyBaseTypes))], name='unique_tuple'),)
+            return super(AddDeclAttrMetaclass, cls).__new__(cls, name, bases, dict)
 
     BaseFromDict = declarative_base(metaclass = AddDeclAttrMetaclass)
     sql_bases.append(BaseFromDict)
-
-    TUPLE = BasicEntity(tuple_tablename, columns, BaseFromDict, __objectname__)
 
     class TupleBase:
 
         def get(self, index):
             return getattr(self, f"elem{index}")
 
-        def put(self, index, val):
+        def set(self, index, val):
             setattr(self, f"elem{index}", val)
 
         def __repr__(self):
             textual = ','.join(map(lambda x: x + " " + repr(getattr(self, x)), repr_cols))
-            return f'{self.__tablename__} : {textual}'
-     
-    
-    print(TupleBase.__dict__)
-    for attr in TupleBase.__dict__:
-        if attr not in dir(TUPLE) or attr == '__repr__':
-            print(attr)
-            setattr(TUPLE, attr, TupleBase.__dict__[attr])
+            return f'{tuple_tablename} : {textual}'
 
-    return TUPLE
+    _TUPLE = BasicEntity(tuple_tablename, columns, [BaseFromDict, TupleBase], __objectname__)
+
+    return _TUPLE
 
 
 if __name__ == "__main__":
@@ -104,52 +86,12 @@ if __name__ == "__main__":
     v3 = Test.GET_CREATE(session, valuetup="tuple3")
     v4 = Test.GET_CREATE(session, valuetup="tuple4")
 
-    i1 = _Integer(id=182)
-    i2 = _Integer(id=190)
-    i3 = _Integer(id=9999999)
+    i1 = _Integer.GET_CREATE(session, id=182)
+    i2 = _Integer.GET_CREATE(session, id=190)
+    i3 = _Integer.GET_CREATE(session, id=9999999)
 
-    s1 = _String(id="Yo")
-    s2 = _String(id="Man")
-
-    try:
-        session.add(i1)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        i1 = session.query(_Integer).filter_by(id=182).one()
-
-    try:
-        session.add(i2)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        i2 = session.query(_Integer).filter_by(id=190).one()
-    
-    try:
-        session.add(i3)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        i3 = session.query(_Integer).filter_by(id=9999999).one()
-
-    try:
-        session.add(s1)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        s1 = session.query(_String).filter_by(id="Yo").one()
-
-    try:
-        session.add(s2)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        s2 = session.query(_String).filter_by(id="Man").one()
+    s1 = _String.GET_CREATE(session, id="Yo")
+    s2 = _String.GET_CREATE(session, id="Man")
 
 
     TUPLE_TYPE = TUPLE(Test, _Integer, Test, _String)
@@ -159,7 +101,19 @@ if __name__ == "__main__":
 
     print(a1)
     print(a2)
-    a1.put(1, i3)
+    a1.set(1, i3)
 
-    print(a1)
-    session.commit()
+    try:
+        print(a1)
+        session.commit()
+    except IntegrityError:
+        print("Integrity error normal if db already created before")
+        session.rollback()
+
+    print(a1.get(0))
+    print(a1.get(1))
+
+    TUPLE_TYPE2 = TUPLE(Test, _Integer, Test, _String)
+    TUPLE_TYPE3 = TUPLE(Test, _Integer, Test)
+
+    print(TUPLE_TYPE2 == TUPLE_TYPE)

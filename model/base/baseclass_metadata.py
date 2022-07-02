@@ -1,5 +1,5 @@
 def baseclass_for_metadata(MetadataClass, commit=True):
-
+    
     class _To_Inherit:
 
         __metadataclass__ = MetadataClass
@@ -11,7 +11,7 @@ def baseclass_for_metadata(MetadataClass, commit=True):
                 return None
             else:
                 return cls(session, metadata)
-        
+
         @classmethod
         def GET_CREATE(cls, session, **argv):
             base_obj = cls.GET(session, **argv)
@@ -33,7 +33,7 @@ def baseclass_for_metadata(MetadataClass, commit=True):
         def DELETE(cls, session, element=None, **argv):
             to_delete = element
             if to_delete:
-                assert(to_delete.__class__ == cls or element.__class__ == MetadataClass)
+                assert (to_delete.__class__ == cls or element.__class__ == MetadataClass)
                 if to_delete.__class__ != cls:
                     if not element.id:
                         return
@@ -43,7 +43,7 @@ def baseclass_for_metadata(MetadataClass, commit=True):
                 if to_delete is None:
                     return
             to_delete.clear(session)
-                
+
         @classmethod
         def GET_COND(cls, session, condition):
             from_metadata = MetadataClass.GET_COND(session, condition)

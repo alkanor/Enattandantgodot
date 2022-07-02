@@ -1,13 +1,12 @@
 from sqlalchemy import Column, Integer as _Integer
 
-from model._implem import BaseType
+from model.base import Base
+
+from .common import CommonMethodBase
 
 
-class Integer(BaseType):
+class Integer(Base, CommonMethodBase):
 
-    __tablename__ = f'integer'
+    __tablename__ = 'integer'
 
     id = Column(_Integer, primary_key=True)
-
-    def __repr__(self):
-        return f'{self.id}'
