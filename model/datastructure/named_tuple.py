@@ -11,12 +11,7 @@ from model.base import sql_bases
 __objectname__ = "NAMED_TUPLE"
 
 
-def _LIST_DEPENDANCIES(**NamedSQLAlchemyBaseTypes):
-
-    return map(lambda x: x[0]+","+x[1].__tablename__, sorted(NamedSQLAlchemyBaseTypes.items()))
-
-
-@register_type(__objectname__, _LIST_DEPENDANCIES)
+@register_type(__objectname__, lambda **basetypes: map(lambda x: x[0]+","+x[1].__tablename__, sorted(basetypes.items())))
 def NAMED_TUPLE(**NamedSQLAlchemyBaseTypes):
 
     tuple_tablename = f'{__objectname__}<{",".join(sorted(NamedSQLAlchemyBaseTypes.keys()))}>'

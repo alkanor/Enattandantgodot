@@ -17,4 +17,3 @@ def register_type(typename, depends_on):
 
         return called_f
     return sub
-        

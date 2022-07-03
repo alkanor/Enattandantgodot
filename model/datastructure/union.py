@@ -9,16 +9,12 @@ from model.type_system import register_type
 __objectname__ = "UNION"
 
 
-def _LIST_DEPENDANCIES(*SQLAlchemyBaseTypes):
-    return sorted(map(lambda x: x.__tablename__, set(SQLAlchemyBaseTypes)))
-
-
-@register_type(__objectname__, _LIST_DEPENDANCIES)
-def TUPLE(*SQLAlchemyBaseTypes):
+@register_type(__objectname__, lambda *basetypes: sorted(map(lambda x: x.__tablename__, set(basetypes))))
+def UNION(*SQLAlchemyBaseTypes):
     per_tablename = {x.__tablename__: x for x in SQLAlchemyBaseTypes}
     sorted_keys = sorted(per_tablename.keys())
     sorted_basetypes = sorted(per_tablename.items())
-    sorted_values = list(lambda x: x[1], sorted_basetypes)
+    sorted_values = list(map(lambda x: x[1], sorted_basetypes))
 
     union_tablename = f'{__objectname__}<{",".join(sorted_keys)}>'
 
@@ -41,9 +37,8 @@ def TUPLE(*SQLAlchemyBaseTypes):
         def __new__(cls, name, bases, dict):
             for i, base_type in sorted_basetypes:
                 dict.update({f"{i}_type": base_type})
-                dict.update({f"{i}_id": Column(Integer, ForeignKey(base_type.id), nullable=True)})
+                dict.update({f"{i}_id": Column(Integer, ForeignKey(base_type.id), nullable=True, unique=True)})
                 dict.update({i: declared_attr(relationship_col(i))})
-            dict["__table_args__"] = (UniqueConstraint(*[f"{i}_id" for i in sorted_basetypes], name='unique_union'),)
             return super(AddDeclAttrMetaclass, cls).__new__(cls, name, bases, dict)
 
     BaseFromDict = declarative_base(metaclass=AddDeclAttrMetaclass)
@@ -52,9 +47,12 @@ def TUPLE(*SQLAlchemyBaseTypes):
     class UnionBase:
 
         def __init__(self, *args, **argv):
-            print("INIT IN UNION")
-            print(args)
-            print(argv)
+            assert(len(argv) + len(args) == 1)
+            if argv:
+                arg = list(argv.items())[0]
+                setattr(self, arg[0], arg[1])
+            else:
+                setattr(self, args[0].__tablename__, args[0])
 
         def get(self):
             not_none = [getattr(self, i) for i in sorted_keys]
@@ -64,6 +62,8 @@ def TUPLE(*SQLAlchemyBaseTypes):
 
         def set(self, value):
             assert(value.__tablename__ in sorted_keys)
+            for k in sorted_keys:
+                setattr(self, k, None)
             setattr(self, value.__tablename__, value)
 
         def __repr__(self):
@@ -97,61 +97,28 @@ if __name__ == "__main__":
     v3 = Test.GET_CREATE(session, lol="make", xD=12)
     v4 = Test.GET_CREATE(session, lol="stupid", xD=23)
 
-    i1 = _Integer(id=182)
-    i2 = _Integer(id=165)
-    i3 = _Integer(id=999)
+    i1 = _Integer.GET_CREATE(session, id=88)
+    i2 = _Integer.GET_CREATE(session, id=145)
+    i3 = _Integer.GET_CREATE(session, id=999)
 
-    s1 = _String(id="Yo")
-    s2 = _String(id="Man")
+    s1 = _String.GET_CREATE(session, id="Yo")
+    s2 = _String.GET_CREATE(session, id="Man")
 
-    try:
-        session.add(i1)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        i1 = session.query(_Integer).filter_by(id=182).one()
+    UNION_TYPE = UNION(Test, _Integer, _String)
+
+    a1 = UNION_TYPE.GET_CREATE(session, string=s2)
+    a2 = UNION_TYPE(i3)
 
     try:
-        session.add(i2)
+        session.add(a2)
         session.commit()
-    except:
-        print("already here")
+    except IntegrityError:
+        print("If exception normal if db already existing")
         session.rollback()
-        i2 = session.query(_Integer).filter_by(id=165).one()
-
-    try:
-        session.add(i3)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        i3 = session.query(_Integer).filter_by(id=999).one()
-
-    try:
-        session.add(s1)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        s1 = session.query(_String).filter_by(id="Yo").one()
-
-    try:
-        session.add(s2)
-        session.commit()
-    except:
-        print("already here")
-        session.rollback()
-        s2 = session.query(_String).filter_by(id="Man").one()
-
-    TUPLE_TYPE = TUPLE(Test, _Integer, Test, _String)
-
-    a1 = TUPLE_TYPE.GET_CREATE(session, elem0=v1, elem1=i1, elem2=v3, elem3=s2)
-    a2 = TUPLE_TYPE.GET_CREATE(session, elem0=v4, elem1=i2, elem2=v1, elem3=s2)
 
     print(a1)
     print(a2)
-    a1.set(1, i3)
+    a1.set(i2)
 
     try:
         print(a1)
@@ -160,10 +127,17 @@ if __name__ == "__main__":
         print("Integrity error normal if db already created before")
         session.rollback()
 
-    print(a1.get(0))
-    print(a1.get(1))
+    print(a1.get())
 
-    TUPLE_TYPE2 = TUPLE(Test, _Integer, Test, _String)
-    TUPLE_TYPE3 = TUPLE(Test, _Integer, Test)
+    a1.set(v2)
+    try:
+        print(a1.get())
+        session.commit()
+    except IntegrityError:
+        print("Integrity error normal if db already created before")
+        session.rollback()
 
-    print(TUPLE_TYPE2 == TUPLE_TYPE)
+    UNION_TYPE2 = UNION(Test, _Integer, _String)
+    UNION_TYPE3 = UNION(_Integer, _String)
+
+    print(UNION_TYPE2 == UNION_TYPE)

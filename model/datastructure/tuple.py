@@ -9,12 +9,7 @@ from model.type_system import register_type
 __objectname__ = "TUPLE"
 
 
-def _LIST_DEPENDANCIES(*SQLAlchemyBaseTypes):
-
-    return map(lambda x: x.__tablename__, SQLAlchemyBaseTypes)
-
-
-@register_type(__objectname__, _LIST_DEPENDANCIES)
+@register_type(__objectname__, lambda *basetypes: map(lambda x: x.__tablename__, basetypes))
 def TUPLE(*SQLAlchemyBaseTypes):
 
     tuple_tablename = f'{__objectname__}<{",".join(map(lambda x: x.__tablename__, SQLAlchemyBaseTypes))}>'

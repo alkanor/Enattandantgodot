@@ -19,6 +19,15 @@ def BasicEntity(tablename, columns_dict, ToInherit=None, slug=None):
         __tablename__ = tablename
         __slug__ = slug
 
+        def __init__(self, *args, **argv):
+            cur_dict = argv
+            for base in bases[::-1]:
+                if base != bases[0]: # in this case construct the object possibly with args
+                    base.__init__(self, *args, **cur_dict)
+                else: # the default sql alchemy constructor does not like non-argv arguments so remove it
+                    base.__init__(self, **cur_dict)
+                cur_dict = {k: v for k, v in self.__dict__.items() if k[0] != '_'} # replace the current dict with the attributes set in base constructors
+
         @classmethod
         def GET(cls, session, **argv):
             filtered_result = session.query(cls)

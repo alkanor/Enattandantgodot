@@ -145,7 +145,7 @@ def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_me
 
         def clear(self, session):
             self._session_saved = session
-            statement = delete(_LIST_ENTRY).where(and_(_LIST_ENTRY.metadata_id == self.metadata.id))
+            statement = delete(_LIST_ENTRY).where(_LIST_ENTRY.metadata_id == self.metadata.id)
             session.execute(statement)
             session.commit()
             MetadataClass.DELETE(session, id=self.metadata.id)

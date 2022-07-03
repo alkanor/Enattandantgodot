@@ -3,13 +3,13 @@ from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from model.base import BaseType, BaseChangeClassName
+from model.base import Base
 from model.metadata import baseclass_for_metadata
 from model.type_system import register_type
 from model.base_type import STRING_SIZE
 
 
-class TEST(BaseType):
+class TEST(Base):
 
     __tablename__ = "test"
 
@@ -17,6 +17,7 @@ class TEST(BaseType):
     target_type = Column(String(STRING_SIZE), nullable=False)
 
     def __init__(self, *args, **argv):
+        print("basic init")
         print(self)
         print(args)
         print(argv)
@@ -24,6 +25,7 @@ class TEST(BaseType):
     
     @reconstructor
     def init_on_load(self, *args, **argv):
+        print("init on load")
         print(args)
         print(argv)
         print(self.alias)
