@@ -89,7 +89,7 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
 
             self.copy_aliased_attributes()
             
-            super(_ALIAS, self).__init__(alias_id=self.target.id if is_base_sqlalchemy_type else self.target.metadata.id)
+            super().__init__(alias_id=self.target.id if is_base_sqlalchemy_type else self.target.metadata.id)
 
         @reconstructor
         def init_on_load(self):

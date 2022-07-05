@@ -39,7 +39,7 @@ def UNION(*SQLAlchemyBaseTypes):
                 dict.update({f"{i}_type": base_type})
                 dict.update({f"{i}_id": Column(Integer, ForeignKey(base_type.id), nullable=True, unique=True)})
                 dict.update({i: declared_attr(relationship_col(i))})
-            return super(AddDeclAttrMetaclass, cls).__new__(cls, name, bases, dict)
+            return super().__new__(cls, name, bases, dict)
 
     BaseFromDict = declarative_base(metaclass=AddDeclAttrMetaclass)
     sql_bases.append(BaseFromDict)

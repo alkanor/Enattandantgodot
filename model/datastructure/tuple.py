@@ -36,7 +36,7 @@ def TUPLE(*SQLAlchemyBaseTypes):
                 dict.update({f"elem{i}_id": Column(Integer, ForeignKey(base_type.id), nullable=False)})
                 dict.update({f"elem{i}": declared_attr(relationship_col(i))})
             dict["__table_args__"] = (UniqueConstraint(*[f"elem{i}_id" for i in range(len(SQLAlchemyBaseTypes))], name='unique_tuple'),)
-            return super(AddDeclAttrMetaclass, cls).__new__(cls, name, bases, dict)
+            return super().__new__(cls, name, bases, dict)
 
     BaseFromDict = declarative_base(metaclass = AddDeclAttrMetaclass)
     sql_bases.append(BaseFromDict)

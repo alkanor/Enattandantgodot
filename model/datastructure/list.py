@@ -4,8 +4,8 @@ from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship
 
 from model.metadata.named_date_metadata import NAMED_DATE_METADATA
-from model.base import Base, BaseAndMetaChangeClassName
-from model.metadata import baseclass_for_metadata
+from model.base.baseclass_metadata import baseclass_for_metadata
+from model.base import BaseAndMetaChangeClassName
 from model.type_system import register_type
 
 

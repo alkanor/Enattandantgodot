@@ -6,7 +6,7 @@ from .sql_bases import sql_bases
 class MetaCreateTableWhenEngine(DeclarativeMeta):
     # __init__ is ok in this case since it's only an external action to perform
     def __init__(cls, name, bases, dict):
-        super(MetaCreateTableWhenEngine, cls).__init__(name, bases, dict)
+        super().__init__(name, bases, dict)
 
         from model_to_disk import get_engine
         if get_engine():

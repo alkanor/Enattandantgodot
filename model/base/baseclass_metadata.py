@@ -1,5 +1,4 @@
 def baseclass_for_metadata(MetadataClass, commit=True):
-    
     class _To_Inherit:
 
         __metadataclass__ = MetadataClass
@@ -13,20 +12,17 @@ def baseclass_for_metadata(MetadataClass, commit=True):
                 return cls(session, metadata)
 
         @classmethod
-        def GET_CREATE(cls, session, **argv):
+        def GET_CREATE(cls, session, *args, **argv):
             base_obj = cls.GET(session, **argv)
             if base_obj:
                 return base_obj
             else:
-                return cls.NEW(session, **argv)
+                return cls.NEW(session, *args, **argv)
 
         @classmethod
-        def NEW(cls, session, **argv):
+        def NEW(cls, session, *args, **argv):
             new_metadata = MetadataClass.NEW(session, **argv)
-            new_obj = cls(session, new_metadata)
-            if commit:
-                session.add(new_obj)
-                session.commit()
+            new_obj = cls(session, new_metadata, *args)
             return new_obj
 
         @classmethod

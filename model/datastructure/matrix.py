@@ -21,7 +21,7 @@ class TEST(Base):
         print(self)
         print(args)
         print(argv)
-        return super(TEST, self).__init__(*args, **argv)
+        return super().__init__(*args, **argv)
     
     @reconstructor
     def init_on_load(self, *args, **argv):

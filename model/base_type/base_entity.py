@@ -41,11 +41,20 @@ def BasicEntity(tablename, columns_dict, ToInherit=None, slug=None):
                 return None if not result else result
 
         @classmethod
-        def GET_CREATE(cls, session, **argv):
+        def GET_ONE(cls, session, **argv):
+            filtered_result = session.query(cls)
+            for colname in columns_dict:
+                filtered_result = filtered_result.filter(getattr(cls, colname) == argv[colname] if argv.get(colname) else True)
+
+            result = list(filtered_result.all())
+            return result[0]
+
+        @classmethod
+        def GET_CREATE(cls, session, *args, **argv):
             existing = cls.GET(session, **argv)
             if existing:
                 return existing
-            newobj = cls(**argv)
+            newobj = cls(*args, **argv)
             session.add(newobj)
             session.commit()
             for k, v in argv.items():
@@ -54,8 +63,8 @@ def BasicEntity(tablename, columns_dict, ToInherit=None, slug=None):
             return newobj
 
         @classmethod
-        def NEW(cls, session, **argv):
-            newobj = cls(**argv)
+        def NEW(cls, session, *args, **argv):
+            newobj = cls(*args, **argv)
             session.add(newobj)
             session.commit()
             return newobj

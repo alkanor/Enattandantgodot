@@ -15,7 +15,7 @@ def BaseAndMetaChangeClassName(*SQLAlchemyObjects):
     class MetaChangeClassName(MetaCreateTableWhenEngine):
         # __init__ is ok in this case since it's only a cosmetic change on the class name
         def __init__(cls, name, bases, dict):
-            super(MetaChangeClassName, cls).__init__(name+"_"+classname, bases, dict)
+            super().__init__(name+"_"+classname, bases, dict)
 
     _BaseChangeClassName = declarative_base(metaclass = MetaChangeClassName)
     _cached_classes[classname] = _BaseChangeClassName

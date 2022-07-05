@@ -1,11 +1,11 @@
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, ForeignKey
-from sqlalchemy import and_, delete
+from sqlalchemy import delete
 from sqlalchemy.orm import relationship
 
 from model.metadata.named_date_metadata import NAMED_DATE_METADATA
-from model.base import Base, BaseAndMetaChangeClassName
-from model.metadata import baseclass_for_metadata
+from model.base.baseclass_metadata import baseclass_for_metadata
+from model.base import BaseAndMetaChangeClassName
 from model.type_system import register_type
 
 
@@ -37,7 +37,7 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
     assert (metaclass_tablename == MetadataClass.__tablename__)
 
     ChangeClassNameBase, _ = BaseAndMetaChangeClassName(SQLAlchemyBaseType, MetadataClass)
-    class _METADATED_OBJECT(ChangeClassNameBase, baseclass_for_metadata(MetadataClass)):
+    class _METADATED_ENTRY(ChangeClassNameBase):
 
         __tablename__ = object_tablename
         __metadataclass__ = MetadataClass
@@ -55,9 +55,15 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
         def obj(cls):
             return relationship(SQLAlchemyBaseType, foreign_keys=[cls.object_id])
 
+
+    class _METADATED_OBJECT(baseclass_for_metadata(MetadataClass)):
+
+        __metadataclass__ = MetadataClass
+
         def __init__(self, *args, **argv):
             if not args: # no session, so basic sqlalchemy construction
-                super(ChangeClassNameBase, self).__init__(*args, **argv)
+                self.entry = _METADATED_ENTRY(*args, **argv)
+                self.update_from_entry()
                 return
             else: # at least session in arg, we can automatically setup what is needed for object search according to args types
                 session = args[0]
@@ -65,71 +71,102 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
                 assert type(session) != MetadataClass and type(session) != SQLAlchemyBaseType, "First argument must be an SQLAlchemy session"
 
                 if len(args) > 2:
-                    if type(args[1]) == self.__metadataclass__:  # in this case we must have the third argument type = metadata
-                        self.metadataobj = args[1]
-                        self.obj = args[2]
+                    if type(args[1]) == MetadataClass:  # in this case we must have the third argument type = metadata
+                        self.entry = _METADATED_ENTRY(metadataobj=args[1], obj=args[2])
                     else:
-                        self.metadataobj = args[2]
-                        self.obj = args[1]
-                    already_existing = session.query(_METADATED_OBJECT).filter_by(metadataobj=self.metadataobj, obj=self.obj).one_or_none()
+                        self.entry = _METADATED_ENTRY(metadataobj=args[2], obj=args[1])
+                    self.update_from_entry()
+                    already_existing = session.query(_METADATED_ENTRY).filter_by(metadataobj=self._metadata, obj=self._obj).one_or_none()
                     if not already_existing: # persisting the metadated object if not existing as all required data is known
-                        session.add(self)
+                        session.add(self.entry)
                         session.commit()
                 else:
-                    self.metadataobj = None
-                    self.obj = None
-                    if type(args[1]) == self.__metadataclass__:
-                        self.metadataobj = args[1]
+                    if type(args[1]) == MetadataClass:
+                        self.entry = _METADATED_ENTRY(metadataobj=args[1])
                     else:
-                        self.obj = args[1]
+                        self.entry = _METADATED_ENTRY(obj=args[1])
+                    self.update_from_entry()
                 self._session_saved = session
+
+        def update_from_entry(self):
+            self._metadata = self.entry.metadataobj
+            self._obj = self.entry.obj
 
         # lazy load the real object when needed, otherwise only the metadata suffices
         @property
         def object(self):
-            if not self.obj: # get the object from its metadata
-                self.obj = self._session_saved.query(_METADATED_OBJECT).join(_METADATED_OBJECT.obj).filter(_METADATED_OBJECT.metadataobj == self.metadataobj).one_or_none()
-            return self.obj
+            if not self.entry.obj: # get the object from its metadata
+                existing_entry = self._session_saved.query(_METADATED_ENTRY).join(_METADATED_ENTRY.obj).filter(_METADATED_ENTRY.metadataobj == self.entry.metadataobj).one_or_none()
+                if existing_entry:
+                    self.entry = existing_entry
+                    self.update_from_entry()
+            return self._obj
 
         @object.setter
         def object(self, new_obj):
-            self.obj = new_obj
-            self._session_saved.add(self)
-            self._session_saved.commit()
+            self.entry.obj = new_obj
+            self._session_saved.add(self.entry)
+            try:
+                self._session_saved.commit()
+            except Exception as e:
+                self.entry.obj = None
+                self._session_saved.rollback()
+                raise e
+            self.update_from_entry()
 
         @object.deleter
         def object(self):
-            self.obj = None
+            self.entry.obj = None
 
 
         @property
-        def metadata_object(self):
-            if not self.metadataobj: # get the object from its metadata
-                self.metadataobj = self._session_saved.query(_METADATED_OBJECT).join(_METADATED_OBJECT.metadataobj).filter(_METADATED_OBJECT.obj == self.obj).one_or_none()
-            return self.metadataobj
+        def metadata(self):
+            if not self._metadata: # get the object from its metadata
+                existing_entry = self._session_saved.query(_METADATED_ENTRY).join(_METADATED_ENTRY.metadataobj).filter(_METADATED_ENTRY.obj == self.entry.obj).one_or_none()
+                if existing_entry:
+                    self.entry = existing_entry
+                    self.update_from_entry()
+            return self._metadata
 
-        @metadata_object.setter
-        def metadata_object(self, new_metadata):
-            self.metadataobj = new_metadata
-            self._session_saved.add(self)
-            self._session_saved.commit()
+        @metadata.setter
+        def metadata(self, new_metadata):
+            if self.entry.metadataobj:
+                assert type(new_metadata) == MetadataClass, "Set metadata with badly typed class"
+                if not getattr(new_metadata, "id"): # the metadata is not yet persisted, we need it to update the metadated object
+                    self._session_saved.add(new_metadata)
+                    self._session_saved.commit()
+                    assert getattr(new_metadata, "id"), "Committed metadata should have an id"
+                print(f"BEFORE {self.entry.metadataobj}")
+                session.query(_METADATED_ENTRY). \
+                                filter(_METADATED_ENTRY.metadataobj == self.entry.metadataobj). \
+                                update({_METADATED_ENTRY.metadata_id: new_metadata.id})
+                self.update_from_entry()
+            else:
+                self.entry.metadataobj = new_metadata
+                self._session_saved.add(self.entry)
+            try:
+                self._session_saved.commit()
+                print(f"AFTER {self.entry.metadataobj}")
+            except Exception as e:
+                self.entry.metadataobj = None
+                self._session_saved.rollback()
+                raise e
 
-        @metadata_object.deleter
-        def metadata_object(self):
-            self.metadataobj = None
+        @metadata.deleter
+        def metadata(self):
+            self.entry.metadataobj = None
 
 
         def clear(self, session):
             self._session_saved = session
-            statement = delete(_METADATED_OBJECT).where(_METADATED_OBJECT.metadata_id == self.metadata.id)
+            statement = delete(_METADATED_ENTRY).where(_METADATED_ENTRY.metadataobj == self.entry.metadataobj)
             session.execute(statement)
             session.commit()
-            MetadataClass.DELETE(session, id=self.metadata.id)
-            self.obj = None
-            self.metadataobj = None
+            MetadataClass.DELETE(session, id=self.entry.metadataobj.id)
+            self.entry = _METADATED_ENTRY(obj=None, metadataobj=None)
 
         def __repr__(self):
-            return f'{self.metadataobj} : {self.obj}'
+            return f'{self.entry.metadataobj} : {self.entry.obj}'
 
     return _METADATED_OBJECT
 
@@ -138,7 +175,7 @@ if __name__ == "__main__":
     from model_to_disk import create_session
     from model.base_type import BasicEntity, _Integer, _String, STRING_SIZE
 
-    from sqlalchemy.exc import IntegrityError, MultipleResultsFound
+    from sqlalchemy.exc import IntegrityError, MultipleResultsFound, InvalidRequestError
     from sqlalchemy import String
 
     columns = {
@@ -156,9 +193,20 @@ if __name__ == "__main__":
     v3 = Test.GET_CREATE(session, STR="bonjour3", INT=45)
     v4 = Test.GET_CREATE(session, STR="bonjour4", INT=56)
 
+    theint = _Integer.GET_CREATE(session, id=1928)
+
     META1 = MetadatedType(Test)
     META2 = MetadatedType(_String, NAMED_DATE_METADATA)
     META3 = MetadatedType(_Integer)
+
+    basic = META3(obj=theint, metadataobj=META3.__metadataclass__.GET_CREATE(session, name="M99"))
+    print(basic)
+    session.add(basic.entry)
+    try:
+        session.commit()
+    except IntegrityError:
+        print("Already added previously")
+        session.rollback()
 
     _NAMED_DATE_METADATA = META1.__metadataclass__
     try:
@@ -191,20 +239,56 @@ if __name__ == "__main__":
     metaed5 = META1(session, v2)
     metaed6 = META1(session, metadata2)
     metaed7 = META1(session, v1)
+    metaed8 = META1.GET_CREATE(session, v4, name="CREATEALLEZMETADATA")
 
+    print("Objects 1 5 6 7")
     print(metaed1.object)
     print(metaed5.object)
     print(metaed6.object)
     print(metaed7.object)
 
-    print(metaed1.metadata_object)
-    print(metaed5.metadata_object)
-    print(metaed6.metadata_object)
+    print("Meta 1 5 6")
+    print(metaed1.metadata)
+    print(metaed5.metadata)
+    print(metaed6.metadata)
 
     try:
-        print(metaed7.metadata_object)
+        print(metaed7.metadata)
     except MultipleResultsFound:
+        print("Normal base object multiple so exception raised")
+        session.rollback()
+
+    try:
+        metaed5.metadata = metadata4
+    except IntegrityError:
         print("Normal metadata multiple so exception raised")
         session.rollback()
 
-    metaed5.metadata_object = metadata4
+    metadata5 = _NAMED_DATE_METADATA.NEW(session, name="M5")
+    metaed5.metadata = metadata5
+
+    metaed5.metadata = _NAMED_DATE_METADATA(name="M6")
+
+    metaed1.clear(session)
+    print(metaed1)
+
+    try:
+        metaed1.metadata = _NAMED_DATE_METADATA(name="M7")
+        raise Exception("Should not happen")
+    except InvalidRequestError:
+        print("Setting metadata object only after clear yields transient error")
+        session.rollback()
+    except IntegrityError:
+        print("This integrity error comes from the object being reset to none so not null constraint fail before the transient error due to deletion")
+        session.rollback()
+
+    metaed1 = META1(session, _NAMED_DATE_METADATA(name="M7"))
+    metaed1.object = v3
+    print(metaed1)
+
+    try:
+        metaed1.metadata = _NAMED_DATE_METADATA.GET_ONE(session, name="M6")
+        raise Exception("Should not happen")
+    except IntegrityError:
+        print("Setting existing metadata object should be prevented")
+        session.rollback()

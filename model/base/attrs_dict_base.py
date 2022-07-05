@@ -17,7 +17,7 @@ def BaseAndMetaFromAttrDict(attr_dict, *metaclasses):
         # __new__ is more appropriate in this case as we do not know when is handled the real object creation from attrs dict in sqlalchemy
         def __new__(cls, name, bases, dict):
             dict.update({k: v for k, v in attr_dict.items() if v is not None})
-            return super(MetaFromAttrDict, cls).__new__(cls, name, bases, dict)
+            return super().__new__(cls, name, bases, dict)
 
     BaseFromAttrDict = declarative_base(metaclass = MetaFromAttrDict)
     sql_bases.append(BaseFromAttrDict)

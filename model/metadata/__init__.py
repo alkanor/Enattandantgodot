@@ -1,1 +1,0 @@
-from .metadated_type import baseclass_for_metadata
