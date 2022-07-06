@@ -210,6 +210,7 @@ if __name__ == "__main__":
 
     _NAMED_DATE_METADATA = META1.__metadataclass__
     try:
+        print(_NAMED_DATE_METADATA.GET_CREATE(session, name="M1"))
         metadata1 = _NAMED_DATE_METADATA.GET_CREATE(session, name="M1")[0]
     except:
         metadata1 = _NAMED_DATE_METADATA.GET_CREATE(session, name="M1")
@@ -241,16 +242,18 @@ if __name__ == "__main__":
     metaed7 = META1(session, v1)
     metaed8 = META1.GET_CREATE(session, v4, name="CREATEALLEZMETADATA")
 
-    print("Objects 1 5 6 7")
+    print("Objects 1 5 6 7 8")
     print(metaed1.object)
     print(metaed5.object)
     print(metaed6.object)
     print(metaed7.object)
+    print(metaed8.object)
 
-    print("Meta 1 5 6")
+    print("Meta 1 5 6 8")
     print(metaed1.metadata)
     print(metaed5.metadata)
     print(metaed6.metadata)
+    print(metaed8.metadata)
 
     try:
         print(metaed7.metadata)
@@ -278,8 +281,8 @@ if __name__ == "__main__":
     except InvalidRequestError:
         print("Setting metadata object only after clear yields transient error")
         session.rollback()
-    except IntegrityError:
-        print("This integrity error comes from the object being reset to none so not null constraint fail before the transient error due to deletion")
+    except IntegrityError as e:
+        print("Null constraint failed after object deletion")
         session.rollback()
 
     metaed1 = META1(session, _NAMED_DATE_METADATA(name="M7"))
@@ -288,7 +291,7 @@ if __name__ == "__main__":
 
     try:
         metaed1.metadata = _NAMED_DATE_METADATA.GET_ONE(session, name="M6")
-        raise Exception("Should not happen")
-    except IntegrityError:
+        print("If it went here, we are at iteration 2 since the M6 object was linked one time to the id 7 and v2 bonjour2, but another was added so it got freed and reassociated to v3 bonjour3")
+    except IntegrityError as e:
         print("Setting existing metadata object should be prevented")
         session.rollback()

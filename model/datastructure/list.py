@@ -28,7 +28,7 @@ def _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_t
 @register_type(__objectname__, _LIST_DEPENDANCIES)
 def LIST(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
 
-    metaclass_tablename, entrytype_tablename = _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata)
+    metaclass_tablename, entrytype_tablename = _LIST_DEPENDANCIES(SQLAlchemyBaseType, MetadataType, *additional_args_to_construct_metadata)
 
     if not MetadataType:
         MetadataClass = NAMED_DATE_METADATA(__objectname__)
