@@ -20,8 +20,8 @@ def UNION(*SQLAlchemyBaseTypes):
 
     columns = {
         "id": Column(Integer, primary_key=True),
-        **{f"{i}_id": None for i in sorted_keys},
-        **{i: None for i in sorted_keys},
+        **{f"{i}_id": None for i in sorted_keys},   # already in AddDeclAttrMetaclass for sqlalchemy reason
+        **{i: None for i in sorted_keys},            # already in AddDeclAttrMetaclass for sqlalchemy reason
     }
     repr_cols = ["id", *sorted_keys]
 
