@@ -1,6 +1,6 @@
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
-from model.base import BaseAndMetaFromAttrDict
+from persistent.base import BaseAndMetaFromAttrDict
 
 
 def BasicEntity(tablename, columns_dict, ToInherit=None, slug=None):

@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
 
-from model.base_type import STRING_SIZE
+from persistent.base_type import STRING_SIZE
 
 from ._metadata_meta import _META_SOMETHING
 

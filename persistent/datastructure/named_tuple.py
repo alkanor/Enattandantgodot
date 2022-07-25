@@ -3,9 +3,9 @@ from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 
-from model.base import BaseAndMetaFromAttrDict, BaseAndMetaChangeClassName
-from model.type_system import register_type
-from model.base import sql_bases
+from persistent.base import BaseAndMetaFromAttrDict, BaseAndMetaChangeClassName
+from persistent.type_system import register_type
+from persistent.base import sql_bases
 
 
 __objectname__ = "NAMED_TUPLE"
@@ -63,7 +63,7 @@ def NAMED_TUPLE(**NamedSQLAlchemyBaseTypes):
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import BasicEntity, _Integer, _String, STRING_SIZE
+    from persistent.base_type import BasicEntity, _Integer, _String, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy import String

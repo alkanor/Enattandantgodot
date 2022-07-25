@@ -3,10 +3,10 @@ from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy import delete
 from sqlalchemy.orm import relationship
 
-from model.metadata.named_date_metadata import NAMED_DATE_METADATA
-from model.base.baseclass_metadata import baseclass_for_metadata
-from model.base import BaseAndMetaChangeClassName
-from model.type_system import register_type
+from persistent.metadata.named_date_metadata import NAMED_DATE_METADATA
+from persistent.base.baseclass_metadata import baseclass_for_metadata
+from persistent.base import BaseAndMetaChangeClassName
+from persistent.type_system import register_type
 
 
 __objectname__ = "METADATED_TYPE"
@@ -173,7 +173,7 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import BasicEntity, _Integer, _String, STRING_SIZE
+    from persistent.base_type import BasicEntity, _Integer, _String, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError, MultipleResultsFound, InvalidRequestError
     from sqlalchemy import String

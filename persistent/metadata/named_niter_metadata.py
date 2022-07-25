@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String
 
-from model.base_type import STRING_SIZE
+from persistent.base_type import STRING_SIZE
 
 from ._metadata_meta import _META_SOMETHING
 

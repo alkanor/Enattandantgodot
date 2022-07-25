@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Text as _Text
 
-from model.base import Base
+from persistent.base import Base
 
 from .common import CommonMethodBase
 

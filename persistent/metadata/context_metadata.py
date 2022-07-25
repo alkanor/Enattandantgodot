@@ -31,7 +31,7 @@ def CONTEXT_METADATA(metadated_classname, SQLAlchemyContextType):
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import _String, BasicEntity, STRING_SIZE
+    from persistent.base_type import _String, BasicEntity, STRING_SIZE
 
     from sqlalchemy import String
 

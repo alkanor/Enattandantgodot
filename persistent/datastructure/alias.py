@@ -2,9 +2,9 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, String, ForeignKey, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from model.base import Base, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
-from model.type_system import register_type
-from model.base_type import STRING_SIZE
+from persistent.base import Base, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
+from persistent.type_system import register_type
+from persistent.base_type import STRING_SIZE
 
 
 class ALIAS_METADATA(Base):
@@ -128,7 +128,7 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
 
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import BasicEntity, STRING_SIZE
+    from persistent.base_type import BasicEntity, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError, InvalidRequestError
     from sqlalchemy import String

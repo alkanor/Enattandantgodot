@@ -4,6 +4,6 @@
 
 
 # # instanciate every table that is already pre-declared
-# from model_to_disk import db_engine
+# from persistent_to_disk import db_engine
 
     

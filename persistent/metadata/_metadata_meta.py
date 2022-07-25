@@ -1,4 +1,4 @@
-from model.base_type import BasicEntity
+from persistent.base_type import BasicEntity
 
 
 def _META_SOMETHING(metaname, columns_dict, MetaAdditional=None):

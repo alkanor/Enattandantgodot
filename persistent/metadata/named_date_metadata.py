@@ -1,7 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 
-from model.base_type import STRING_SIZE
+from persistent.utils.utcnow_compile import utcnow
+from persistent.base_type import STRING_SIZE
 
 from ._metadata_meta import _META_SOMETHING
 
@@ -13,16 +14,15 @@ def NAMED_DATE_METADATA(metadated_classname):
     columns = {
         "id": Column(Integer, primary_key=True),
         "name":  Column(String(STRING_SIZE)),
-        "date": Column(DateTime(timezone=True), server_default=func.now()),
+        "date": Column(DateTime(timezone=True), server_default=utcnow()),
     }
 
     return _META_SOMETHING(tname_prefix, columns)
 
 
-
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import _String
+    from persistent.base_type import _String
 
     session = create_session()
 

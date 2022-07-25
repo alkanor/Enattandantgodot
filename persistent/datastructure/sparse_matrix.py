@@ -3,10 +3,9 @@ from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy import and_, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from model.base import Base
-from model.metadata import baseclass_for_metadata
-from model.type_system import register_type
-from model.base_type import STRING_SIZE
+from persistent.base import Base
+from persistent.type_system import register_type
+from persistent.base_type import STRING_SIZE
 
 
 class TEST(Base):
@@ -31,9 +30,17 @@ class TEST(Base):
         print(self.target_type)
 
 
+class TEST2(Base):
+    __tablename__ = "test2"
+
+    i = Column(Integer, primary_key=True)
+    t = Column(Integer, ForeignKey(TEST.alias), nullable=False)
+    rel = relationship(TEST, foreign_keys=[t])
+
+
 if __name__ == "__main__":
     from model_to_disk import create_session
-    from model.base_type import BasicEntity, STRING_SIZE
+    from persistent.base_type import BasicEntity, STRING_SIZE
 
     from sqlalchemy.orm.exc import FlushError
     from sqlalchemy.exc import IntegrityError
@@ -52,3 +59,15 @@ if __name__ == "__main__":
     print("now")
     e = session.query(TEST).filter_by(alias="okok").one_or_none()
     print(e.target_type)
+
+    print(session.query(TEST).filter_by(alias="okok").one_or_none())
+    print(session.query(TEST).filter_by(alias="okok").one_or_none())
+    print(session.query(TEST).filter_by(alias="okok").one_or_none() == session.query(TEST).filter_by(alias="okok").one_or_none())
+
+    d2 = TEST(alias='pp', target_type='oo')
+    t2 = TEST2(rel=d2)
+ #   session.add(d2)
+ #   session.commit()
+    session.add(t2)
+    session.commit()
+    print(t2.rel.alias)

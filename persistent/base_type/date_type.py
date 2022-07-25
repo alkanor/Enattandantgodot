@@ -1,6 +1,6 @@
 from sqlalchemy import Column, DateTime
 
-from model.base import Base
+from persistent.base import Base
 
 from .common import CommonMethodBase
 
