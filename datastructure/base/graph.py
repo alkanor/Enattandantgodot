@@ -123,12 +123,12 @@ class Graph:
 
 
 
-    def add_child(self, base, child=None, edgeval=None):
+    def add_child(self, base, childval=None, edgeval=None):
         self.check_node(base)
-        self.check_target(child)
+        self.check_target(childval)
         self.check_edgeval(edgeval)
 
-        node = Node(child if self.__nodetype else None)
+        node = Node(childval if self.__nodetype else None)
         edge = Edge(base, node, edgeval)
         self.check_constraints(Graph.add_child.__name__, [node, edge])
 
@@ -146,7 +146,7 @@ class Graph:
         self.reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.__value))
 
 
-    def add_edge(self, source, target, edgeval=None):
+    def add_link(self, source, target, edgeval=None): # same that add_edge but with no edge struct
         self.check_node(source)
         self.check_node(target)
         assert source in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (source)"
@@ -179,26 +179,172 @@ class Graph:
         previous_size = len(self.__per_node[edge.source])
         previous_size_rev = len(self.__reverse_per_node[edge.target])
         self.__per_node[edge.source] = [(node, edgeval) for node, edgeval in self.__per_node[edge.source] if
-                                            node != edge.target and (edge.edgeval is None or edge.edgeval == edgeval)]
+                                            node != edge.target or (edge.edgeval is not None and edge.edgeval != edgeval)]
         self.__reverse_per_node[edge.target] = [(node, edgeval) for node, edgeval in self.__reverse_per_node[edge.target] if
-                                                    node != edge.source and (edge.edgeval is None or edge.edgeval == edgeval)]
+                                                    node != edge.source or (edge.edgeval is not None and edge.edgeval == edgeval)]
         new_size = len(self.__per_node[edge.source])
         new_size_rev = len(self.__reverse_per_node[edge.target])
-        assert new_size-previous_size == new_size_rev-previous_size_rev, "Major symetry issue during edge deletion"
+        assert new_size-previous_size == new_size_rev-previous_size_rev, \
+            f"Major symetry issue during edge deletion {new_size-previous_size} edges removed in base and {new_size_rev-previous_size_rev} edges removed in reverse"
 
         return new_size-previous_size
 
 
     def del_node(self, node):
         self.check_node(node)
+        assert node in self.__nodes, "Node to delete not in graph nodes"
         self.check_constraints(Graph.del_node.__name__, node)
-        pass
+
+        to_remove = self.__per_node.get(node, None)
+        if to_remove:
+            n_removed = 0
+            for linked, _ in to_remove:
+                prev_size = len(self.__reverse_per_node[linked])
+                self.__reverse_per_node[linked] = [(n, e) for n, e in self.__reverse_per_node[linked] if n != node]
+                new_size = len(self.__reverse_per_node[linked])
+                n_removed += prev_size - new_size
+            assert n_removed == len(to_remove), f"Major symetry issue during node deletion {n_removed} edges removed instead of {len(to_remove)} expected"
+            self.__per_node.remove(node)
+        self.__nodes.remove(node)
+
+
+
+
+    def add_children(self, base, children_edgevals):
+        self.check_node(base)
+        nodevals_and_edgevals = list(children_edgevals)  # handle generator
+        for child, edgeval in nodevals_and_edgevals:
+            self.check_target(child)
+            self.check_edgeval(edgeval)
+        nodes = [Node(child if self.__nodetype else None) for child, _ in nodevals_and_edgevals]
+        edges = [Edge(base, node, edgeval) for node, (_, edgeval) in zip(nodes, nodevals_and_edgevals)]
+
+        self.check_constraints(Graph.add_child.__name__, [nodes, edges])
+
+        self.__nodes.update(set(nodes))
+        self.__per_node.setdefault(base, []).extend([(node, edgeval) for node, (_, edgeval) in zip(nodes, nodevals_and_edgevals)])
+        for node, (_, edgeval) in zip(nodes, nodevals_and_edgevals):
+            self.__reverse_per_node.setdefault(node, []).append((base, edgeval))
+        return nodes
+
+
+    def add_edges(self, edges):
+        edges_list = list(edges)  # handle generator
+        for edge in edges_list:
+            self.check_edge(edge)
+        self.check_constraints(Graph.add_edge.__name__, edges_list)
+
+        for edge in edges_list:
+            self.per_node.setdefault(edge.source, []).append((edge.target, edge.__value))
+            self.reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.__value))
+        return edges_list
+
+
+    def add_links(self, sources_targets_edgevals): # same that add_edge but with no edge struct
+        sources_targets_edgevals_list = list(sources_targets_edgevals)  # handle generator
+        for source, target, edgeval in sources_targets_edgevals_list:
+            self.check_node(source)
+            self.check_node(target)
+            assert source in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (source)"
+            assert target in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (target)"
+
+        edges = [Edge(source, target, edgeval) for source, target, edgeval in sources_targets_edgevals_list]
+        self.check_constraints(Graph.add_edge.__name__, edges)
+
+        for source, target, edgeval in sources_targets_edgevals_list:
+            self.per_node.setdefault(source, []).append((target, edgeval))
+            self.reverse_per_node.setdefault(target, []).append((source, edgeval))
+        return edges
+
+
+    def add_nodes(self, nodevals):
+        nodevals_list = list(nodevals)  # handle generator
+        for nodeval in nodevals_list:
+            self.check_target(nodeval)
+
+        nodes = [Node(nodeval if self.__nodetype else None) for nodeval in nodevals_list]
+        self.check_constraints(Graph.add_ndoe.__name__, nodes)
+
+        self.__nodes.update(nodes)
+        return nodes
+
+
+    def del_edges(self, edges):
+        edges_list = list(edges)  # handle generator
+        for edge in edges_list:
+            self.check_edge(edge)
+            assert edge.source in self.__per_node, "Edge source to delete is not in current graph edges"
+            assert edge.target in self.__reverse_per_node, "Edge target to delete is not in current graph edges"
+        self.check_constraints(Graph.del_edge.__name__, edges_list)
+
+        per_source = {}
+        per_target = {}
+        for edge in edges_list:
+            per_source.setdefault(edge.source, []).append((edge.target, edge.edgeval))
+            per_target.setdefault(edge.target, []).append((edge.source, edge.edgeval))
+
+        previous_size = 0
+        new_size = 0
+        for source in per_source:
+            previous_size += len(self.__per_node[source])
+            self.__per_node[source] = [(node, edgeval) for node, edgeval in self.__per_node[source] if
+                                           (node, edgeval) not in per_source[source]
+                                           and
+                                           (node, None) not in per_source[source]
+                                       ]
+            new_size += len(self.__per_node[source])
+
+        previous_size_rev = 0
+        new_size_rev = 0
+        for target in per_target:
+            previous_size_rev += len(self.__reverse_per_node[target])
+            self.__reverse_per_node[target] = [(node, edgeval) for node, edgeval in self.__reverse_per_node[target] if
+                                                   (node, edgeval) not in per_target[target]
+                                                   and
+                                                   (node, None) not in per_target[target]
+                                               ]
+            new_size_rev += len(self.__reverse_per_node[target])
+
+        assert new_size-previous_size == new_size_rev-previous_size_rev, \
+            f"Major symetry issue during edge deletion {new_size-previous_size} edges removed in base and {new_size_rev-previous_size_rev} edges removed in reverse"
+
+        return new_size-previous_size
+
+
+    def del_nodes(self, nodes):
+        nodes_set = set(nodes)  # handle generator
+        for node in nodes_set:
+            self.check_node(node)
+            assert node in self.__nodes, "Node to delete not in graph nodes"
+        self.check_constraints(Graph.del_node.__name__, nodes_set)
+
+        to_remove_lists = [(node, self.__per_node[node]) for node in nodes_set if node in self.__per_node]
+        if to_remove_lists:
+            accumulated = {}
+            n_to_remove = 0
+            for node, to_remove in to_remove_lists:
+                n_to_remove += len(to_remove)
+                for linked, _ in to_remove:
+                    accumulated.setdefault(linked, set()).add(node)
+            n_removed = 0
+            for linked in accumulated:
+                prev_size = len(self.__reverse_per_node[linked])
+                self.__reverse_per_node[linked] = [(n, e) for n, e in self.__reverse_per_node[linked] if n not in accumulated[linked]]
+                new_size = len(self.__reverse_per_node[linked])
+                n_removed += prev_size - new_size
+            assert n_removed == n_to_remove, f"Major symetry issue during node deletion {n_removed} edges removed instead of {n_to_remove} expected"
+            for node, _ in to_remove_lists:
+                self.__per_node.remove(node)
+        self.__nodes.difference_update(node)
+
 
 
     def iterate(self):
         yield self.__nodetype
         yield self.__edgetype
         yield from self.__nodes
+        for node in self.__per_node:
+            yield from [Edge(node, target, edgeval) for target, edgeval in self.__per_node[node]]
 
     """
     Reconstructing a graph:
