@@ -97,10 +97,11 @@ class Graph:
         self.__reverse_per_node = {}
 
 
-    def check_constraints(self, *args):
-        for constraint in self.constraints:
-            if not constraint(self, *args):
-                raise ConstraintNotFulfilled(constraint)
+    def check_constraints(self, method_name=False, *args):
+        for methods, constraint in self.constraints:
+            if method_name in methods or not method_name:
+                if not constraint(self, *args):
+                    raise ConstraintNotFulfilled(constraint)
 
 
     def check_node(self, node):
@@ -342,7 +343,7 @@ class Graph:
     def iterate(self):
         yield self.__nodetype
         yield self.__edgetype
-        yield from self.__nodes
+        yield from self.__nodes   # in case solo nodes
         for node in self.__per_node:
             yield from [Edge(node, target, edgeval) for target, edgeval in self.__per_node[node]]
 
@@ -353,18 +354,112 @@ class Graph:
      * check will check constraints regarding additional_properties if true
     """
     @staticmethod
-    def reconstruct(graph_generator, additional_properties=None, check=False):
-        pass
+    def reconstruct(graph_generator, additional_properties=None, check=True):
+        to_add = []
+
+        first = graph_generator.__next__()
+        if type(first) == Node or type(first) == Edge:  # no type for nodes nor edges
+            nodeType = None
+            edgeType = None
+            to_add.append(first)
+        else:
+            nodeType = first
+        second = graph_generator.__next__()
+        if type(second) == Node or type(second) == Edge:  # assume only node type is provided (or edge one if it does not match node type but edge one later)
+            edgeType = None
+            to_add.append(second)
+        else:
+            edgeType = second
+
+        all_elements = list(graph_generator) + to_add
+        try:
+            return Graph.__try_parse_graph(all_elements, nodeType, edgeType, additional_properties, check)
+        except AssertionError as e1:
+            cpy = nodeType
+            nodeType = edgeType
+            edgeType = cpy
+            try:
+                return Graph.__try_parse_graph(all_elements, nodeType, edgeType, additional_properties, check)
+            except AssertionError as e2:
+                raise AssertionError(f"Both graph parsing failed:\n{e1}\nThen {e2}")
+
+    @staticmethod
+    def __try_parse_graph(all_elements, nodeType, edgeType, additional_properties, check):
+        nodes = set()
+        per_nodes = {}
+        rev_per_nodes = {}
+
+        for element in all_elements:
+            if type(element) == Node:
+                if nodeType is None and type(element.nodeval) is not None:  # forcing the node type is previously undetected
+                    nodeType = type(element.nodeval)
+                assert nodeType is None or type(element.nodeval) == nodeType, f"Bad type when trying to parse node, expected {nodeType} got {type(element.nodeval)}"
+                nodes.add(element)
+            elif type(element) == Edge:
+                node1 = element.source
+                node2 = element.target
+                val = element.edgeval
+
+                if nodeType is None and type(node1.nodeval) is not None:  # forcing the node type is previously undetected
+                    nodeType = type(node1.nodeval)
+                if nodeType is None and type(node2.nodeval) is not None:  # forcing the node type is previously undetected
+                    nodeType = type(node2.nodeval)
+                if edgeType is None and type(val) is not None:  # forcing the edge type is previously undetected
+                    edgeType = val
+
+                assert edgeType is None or type(val) == edgeType, f"Bad type when trying to parse edge, expected {edgeType} got {type(val)}"
+                assert type(node1) == Node, f"Bad type when trying to parse edge source, expected Node got {type(node1)}"
+                assert type(node2) == Node, f"Bad type when trying to parse edge target, expected Node got {type(node2)}"
+                assert nodeType is None or type(node1.nodeval) == nodeType, f"Bad type when trying to parse source node, expected {nodeType} got {type(node1.nodeval)}"
+                assert nodeType is None or type(node2.nodeval) == nodeType, f"Bad type when trying to parse target node, expected {nodeType} got {type(node2.nodeval)}"
+
+                per_nodes.setdefault(node1, []).append((node2, val))
+                rev_per_nodes.setdefault(node2, []).append((node1, val))
+
+        base_graph = Graph_from_properties(additional_properties)
+        base_graph.__nodes = nodes
+        base_graph.__per_nodes = per_nodes
+        base_graph.__reverse_per_node = rev_per_nodes
+
+        if check:
+            base_graph.check_constraint()
 
 
-def full_graph_generator():
-    yield current_graph.__nodetype__
-    yield current_graph.__edgetype__
-    yield from current_graph.iterate()
-    yield from elements_to_add
 
 
-new_graph = Graph.reconstruct(full_graph_generator(), properties=iterable_property, check=False)
 
-from .graph_properties_constraints import GraphPropertyConstraints  # to dispose of the properties constraint that depends on Graph without circular dependancy
+from .graph_properties_dependancies import GraphPropertyDependancies, GraphPropertiesPartition
+from .graph_properties_constraints import GraphPropertyConstraints
+from .graph_property import GraphProperty
 
+
+def extend_properties_from_dependancies(properties):
+    properties_set = set([properties] if type(properties) == GraphProperty else properties)
+    extended_properties_set = set(properties_set)
+    for property in properties_set:
+        extended_properties_set = extended_properties_set.union(GraphPropertyDependancies[property])
+    return extended_properties_set
+
+
+def check_properties_compatibility(properties=None):
+    if properties is None:
+        return True
+
+    assert type(properties) == GraphProperty or hasattr(properties, "__iter__"), "properties argument need to be a property iterable or a property"
+
+    extended_properties_set = extend_properties_from_dependancies(properties)
+    index_in_properties_partition = [[(property, i) for i, partition in enumerate(GraphPropertiesPartition) if property in partition]
+                                        for property in extended_properties_set]
+    index_list = []
+    for T_index in index_in_properties_partition:
+        assert len(T_index) == 1, "The indicated property is not in the known GraphPropertiesPartition of all graph properties"
+        index_list.append(T_index[0])
+
+    assert len(index_list) == len(set(index_list)), f"At least 2 properties are incompatible, see index repetition in {index_in_properties_partition}"
+
+
+def Graph_from_properties(nodeType=None, edgeType=None, properties=None):
+    check_properties_compatibility(properties)
+    extended_properties_set = extend_properties_from_dependancies(properties)
+    related_constraints = {GraphPropertyConstraints[property] for property in extended_properties_set}
+    return Graph(nodeType, edgeType, related_constraints)
