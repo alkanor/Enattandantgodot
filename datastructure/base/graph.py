@@ -139,6 +139,9 @@ class Graph:
             for target, edgeval in self.__per_node[source]:
                 yield Edge(source, target, edgeval)
 
+    def edges_number(self):
+        return sum(map(lambda x: len(x[1]), self.__per_node.items()))
+
     # def per_node(self, node):
     #     return self.__per_node[node]
     #
@@ -414,7 +417,6 @@ class Graph:
         first = graph_generator.__next__()
         if type(first) == Node or type(first) == Edge:  # no type for nodes nor edges
             nodeType = None
-            edgeType = None
             to_add.append(first)
         else:
             nodeType = first
@@ -477,6 +479,8 @@ class Graph:
 
         if check:
             base_graph.check_constraint()
+
+        return base_graph
 
 
 

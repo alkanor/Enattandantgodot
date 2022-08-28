@@ -58,7 +58,7 @@ def construct_default_behavior(nodetype_match=None, edgetype_match=None, iterabl
                             yield current_graph.edgetype
                             yield from current_graph.iterate()
                             yield from elements_to_add
-                        new_graph = Graph.reconstruct(full_graph_generator(), properties=iterable_property, check=False)
+                        new_graph = Graph.reconstruct(full_graph_generator(), additional_properties=iterable_property, check=False)
                         return f(new_graph)
                     return f(current_graph, elements_to_add)
                 case None:
@@ -73,14 +73,14 @@ def construct_default_behavior(nodetype_match=None, edgetype_match=None, iterabl
 @construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Directed,))
 def acyclic_directed_constraint(current_graph, elements_to_add=None):
     match elements_to_add:
-        case Edge():                                                # passed argument is edge -> if target has children,
+        case Edge():                                                # passed argument is edge -> if target has children, check if one of the descendants is the source
             for descendant in current_graph.descendants(elements_to_add.target): # oriented implies descendants
                 if descendant == elements_to_add.source:
                     return False
             return True
         case None:                                                   # check the current graph is acyclic
             nodes_from_root = [(node, set()) for node in current_graph.nodes() if current_graph.parents_number(node) == 0]   # oriented implies ancestors
-            if not nodes_from_root and len(current_graph.edges()):   # we have no node without parent and some edges -> implies cycle (easy check)
+            if not nodes_from_root and current_graph.edges_number(): # we have no node without parent and some edges -> implies cycle (easy check)
                 return False
 
             while nodes_from_root:
@@ -159,7 +159,7 @@ def strongly_connected_constraint(current_graph, elements_to_add=None):
                 case _:                                # should be Node, current graph edgetype or nodetype
                     yield elem
 
-    reverse_graph = Graph.reconstruct(reverse_graph_generator, properties=(GraphProperty.Directed,), check=False)
+    reverse_graph = Graph.reconstruct(reverse_graph_generator(), additional_properties=(GraphProperty.Directed,), check=False)
     nodes_set = set(reverse_graph.nodes())
     first_node = nodes_set.__iter__().__next__()
 
@@ -177,7 +177,7 @@ def connected_constraint(current_graph, elements_to_add=None):
     assert elements_to_add==None, "elements_to_add not None should not happen in connected_constraint with decorator"
     connected_per_node = {node: set([node]) for node in current_graph.nodes()}
     for edge in current_graph.edges():
-        connected_per_node[edge.source] = connected_per_node[edge.source].union(connected_per_node[edge.target])
+        connected_per_node[edge.source].update(connected_per_node[edge.target])
         connected_per_node[edge.target] = connected_per_node[edge.source]
         if len(connected_per_node[edge.source]) == len(connected_per_node):             # onlu one clique that gathers all, gg
             return True
@@ -255,9 +255,8 @@ def max_children_per_vertice_constraint(max_children):
                 return True
             case None:
                 for node in current_graph.nodes():
-                    direct_children = set(current_graph.descendants(node, 1))
-                    print(direct_children)
-                    if len(direct_children) > max_children:
+                    direct_children = current_graph.children_number(node)
+                    if direct_children > max_children:
                         return False
                 return True
             case _:
@@ -286,9 +285,8 @@ def max_vertice_degree_constraint(max_neighbours):
                     return False
                 return True
             case None:
-                print(dir(current_graph))
                 for node in current_graph.nodes():
-                    if len(current_graph.closure(node, 1)) > max_neighbours:
+                    if current_graph.direct_neighbors_size(node) > max_neighbours:
                         return False
                 return True
             case _:
