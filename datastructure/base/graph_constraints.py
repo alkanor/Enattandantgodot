@@ -1,12 +1,12 @@
 from .graph_property import GraphProperty
-from .graph import Graph
+from .graph import Graph, Node, Edge
 
 
 '''
 Graph constraints currently supported:
  * Acyclic graph
- * Strongly / Weakly (for oriented graph) connected graph
- * Connected (for non oriented graph) graph
+ * Strongly / Weakly (for directed graph) connected graph
+ * Connected (for non directed graph) graph
  * Parent / children constraints (max or exact)
 
 The API is the following:
@@ -35,13 +35,13 @@ def construct_default_behavior(nodetype_match=None, edgetype_match=None, iterabl
     def decorator(f):
         def sub(current_graph, elements_to_add=None):
             match elements_to_add:
-                case current_graph.__nodetype__():
+                case Node():
                     if nodetype_match == True:
                         return True
                     elif nodetype_match == False:
                         return False
                     return f(current_graph, elements_to_add)
-                case current_graph.__edgetype__():
+                case Edge():
                     if edgetype_match == True:
                         return True
                     elif edgetype_match == False:
@@ -54,8 +54,8 @@ def construct_default_behavior(nodetype_match=None, edgetype_match=None, iterabl
                         return False
                     elif iterable == "fullgraph_check":
                         def full_graph_generator():
-                            yield current_graph.__nodetype__
-                            yield current_graph.__edgetype__
+                            yield current_graph.nodetype
+                            yield current_graph.edgetype
                             yield from current_graph.iterate()
                             yield from elements_to_add
                         new_graph = Graph.reconstruct(full_graph_generator(), properties=iterable_property, check=False)
@@ -70,16 +70,16 @@ def construct_default_behavior(nodetype_match=None, edgetype_match=None, iterabl
 
 
 @assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Oriented,))
-def acyclic_oriented_constraint(current_graph, elements_to_add=None):
+@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Directed,))
+def acyclic_directed_constraint(current_graph, elements_to_add=None):
     match elements_to_add:
-        case current_graph.__edgetype__():                         # passed argument is edge -> if target has children,
-            for descendant in elements_to_add.target.descendants(): # oriented implies descendants
+        case Edge():                                                # passed argument is edge -> if target has children,
+            for descendant in current_graph.descendants(elements_to_add.target): # oriented implies descendants
                 if descendant == elements_to_add.source:
                     return False
             return True
-        case None:                                                 # check the current graph is acyclic
-            nodes_from_root = [(node, set()) for node in current_graph.nodes() if len(node.ancestors(1)) == 0]   # oriented implies ancestors
+        case None:                                                   # check the current graph is acyclic
+            nodes_from_root = [(node, set()) for node in current_graph.nodes() if current_graph.parents_number(node) == 0]   # oriented implies ancestors
             if not nodes_from_root and len(current_graph.edges()):   # we have no node without parent and some edges -> implies cycle (easy check)
                 return False
 
@@ -87,8 +87,8 @@ def acyclic_oriented_constraint(current_graph, elements_to_add=None):
                 current_node, path_from_base = nodes_from_root.pop(0)
                 set_cpy = set(path_from_base)
                 set_cpy.add(current_node)
-                for child in current_node.descendants(1):          # oriented implies descendants
-                    if child in path_from_base:                    # if we come back on an already traveled node from the base, we have a cycle
+                for child in current_graph.descendants(current_node, 1):  # oriented implies descendants
+                    if child in path_from_base:                           # if we come back on an already traveled node from the base, we have a cycle
                         return False
                     nodes_from_root.append((child, set_cpy))
             return True
@@ -97,20 +97,22 @@ def acyclic_oriented_constraint(current_graph, elements_to_add=None):
 
 
 @assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.NonOriented,))
-def acyclic_non_oriented_constraint(current_graph, elements_to_add=None):
+@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.NonDirected,))
+def acyclic_non_directed_constraint(current_graph, elements_to_add=None):
     match elements_to_add:
-        case current_graph.__edgetype__():                     # passed argument is edge
-            for descendant in elements_to_add.target.closure(): # non oriented implies closure (should be a bfs)
+        case Edge():                     # passed argument is edge
+            for descendant in current_graph.closure(elements_to_add.target): # non oriented implies closure (should be a bfs)
                 if descendant == elements_to_add.source:
                     return False
             return True
         case None:  # check the current graph is acyclic
-            if len(current_graph.edges()) >= len(current_graph.nodes()): # at least one cycle if n_edges >= n_vertices
+            edges = list(current_graph.edges())
+            nodes = list(current_graph.nodes())
+            if len(edges) >= len(nodes): # at least one cycle if n_edges >= n_vertices
                 return False
 
-            connected_per_node = {node: set([node]) for node in current_graph.nodes()}
-            for edge in current_graph.edges():
+            connected_per_node = {node: set([node]) for node in nodes}
+            for edge in edges:
                 base_size = len(connected_per_node[edge.source])
                 connected_per_node[edge.source] = connected_per_node[edge.source].union(connected_per_node[edge.target])
                 if base_size == len(connected_per_node[edge.source]):    # if size did not increase, we have a cycle
@@ -122,13 +124,13 @@ def acyclic_non_oriented_constraint(current_graph, elements_to_add=None):
 
 
 @assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Oriented,)) # adding a node alone breaks connectivity
+@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Directed,)) # adding a node alone breaks connectivity
                                                                                                                                                 # adding an edge alone has no effect on connectivity if base graph already weakly connected
 def weakly_connected_constraint(current_graph, elements_to_add=None):
-    assert elements_to_add==None, "elements_to_add not None should not happen in weakly_connected_constraint with decorator"
+    assert elements_to_add is None, "elements_to_add not None should not happen in weakly_connected_constraint with decorator"
     connected_per_node = {node: set([node]) for node in current_graph.nodes()}
     for edge in current_graph.edges():
-        connected_per_node[edge.source] = connected_per_node[edge.source].union(connected_per_node[edge.target])
+        connected_per_node[edge.source].update(connected_per_node[edge.target])
         connected_per_node[edge.target] = connected_per_node[edge.source]
         if len(connected_per_node[edge.source]) == len(connected_per_node):             # onlu one clique that gathers all, gg
             return True
@@ -136,7 +138,7 @@ def weakly_connected_constraint(current_graph, elements_to_add=None):
 
 
 @assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Oriented,)) # adding a node alone breaks connectivity
+@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Directed,)) # adding a node alone breaks connectivity
                                                                                                                                                 # adding an edge alone has no effect on connectivity if base graph already strongly connected
 def strongly_connected_constraint(current_graph, elements_to_add=None):
     assert elements_to_add == None, "elements_to_add not None should not happen in strongly_connected_constraint with decorator"
@@ -144,7 +146,7 @@ def strongly_connected_constraint(current_graph, elements_to_add=None):
     nodes_set = set(current_graph.nodes())
     first_node = nodes_set.__iter__().__next__()
     traveled_nodes = set([first_node])
-    for node in first_node.descendants():              # descendants exists because of strongly connected -> oriented
+    for node in current_graph.descendants(first_node): # descendants exists because of strongly connected -> directed
         traveled_nodes.add(node)
     if len(traveled_nodes) != len(nodes_set):          # we did not even travel all nodes from our starting point, it can't be strongly connected
         return False
@@ -152,15 +154,17 @@ def strongly_connected_constraint(current_graph, elements_to_add=None):
     def reverse_graph_generator():
         for elem in current_graph.iterate():
             match elem:
-                case current_graph.__edgetype__():
-                    yield current_graph.__edgetype__(elem.target, elem.source)
-                case _:        # should be current_graph.__nodetype__ or current_graph.__edgetype__ or current_graph.__nodetype__()
+                case Edge():
+                    yield Edge(elem.target, elem.source, elem.edgeval)
+                case _:                                # should be Node, current graph edgetype or nodetype
                     yield elem
 
-    reverse_graph = Graph.reconstruct(reverse_graph_generator, properties=(GraphProperty.Oriented,), check=False)
+    reverse_graph = Graph.reconstruct(reverse_graph_generator, properties=(GraphProperty.Directed,), check=False)
+    nodes_set = set(reverse_graph.nodes())
+    first_node = nodes_set.__iter__().__next__()
 
     traveled_nodes = set([first_node])
-    for node in first_node.descendants():
+    for node in current_graph.descendants(first_node):
         traveled_nodes.add(node)
     if len(traveled_nodes) != len(nodes_set):           # we did not travel all nodes from our starting point in reverse graph, it can't be strongly connected
         return False
@@ -168,7 +172,7 @@ def strongly_connected_constraint(current_graph, elements_to_add=None):
 
 
 @assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.NonOriented,))
+@construct_default_behavior(nodetype_match=False, edgetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.NonDirected,))
 def connected_constraint(current_graph, elements_to_add=None):
     assert elements_to_add==None, "elements_to_add not None should not happen in connected_constraint with decorator"
     connected_per_node = {node: set([node]) for node in current_graph.nodes()}
@@ -180,13 +184,13 @@ def connected_constraint(current_graph, elements_to_add=None):
     return False
 
 
-@assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=True)
 def max_parents_per_vertice_constraint(max_parents):
+    @assert_first_arg_is_graph_decorator
+    @construct_default_behavior(nodetype_match=True)
     def sub(current_graph, elements_to_add=None):
         match elements_to_add:
-            case current_graph.__edgetype__():                      # passed argument is edge
-                parents = elements_to_add.target.ancestors(1)        # parent implies oriented so ancestors
+            case Edge():                      # passed argument is edge
+                parents = current_graph.ancestors(elements_to_add.target, 1)        # parent implies directed so ancestors
                 if elements_to_add.source in parents:
                     return True
                 elif len(parents) + 1 > max_parents:
@@ -195,17 +199,17 @@ def max_parents_per_vertice_constraint(max_parents):
             case object(__iter__=_):
                 parents_per_child = {}
                 for obj in elements_to_add:
-                    if type(obj) == current_graph.__edgetype__:
+                    if type(obj) == Edge:
                         if obj.target in parents_per_child:
                             parents_per_child[obj.target].add(obj.source)
                         else:
                             parents_per_child[obj.target] = set(obj.source)
                     else:
-                        assert type(obj) == current_graph.__nodetype__, f"Waiting for a nodetype {current_graph.__nodetype__} while itering"
+                        assert type(obj) == Node, "Waiting for a nodetype Node while itering"
 
                 for node in current_graph.nodes():
                     if node in parents_per_child:
-                        parents_per_child[node].update(node.ancestors(1))
+                        parents_per_child[node].update(current_graph.ancestors(node, 1))
 
                 for node in parents_per_child:
                     if len(parents_per_child[node]) > max_parents:
@@ -213,7 +217,7 @@ def max_parents_per_vertice_constraint(max_parents):
                 return True
             case None:
                 for node in current_graph.nodes():
-                    if len(node.ancestors(1)) > max_parents:
+                    if current_graph.parents_number(node) > max_parents:
                         return False
                 return True
             case _:
@@ -222,26 +226,28 @@ def max_parents_per_vertice_constraint(max_parents):
     return sub
 
 
-@assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=False, edgetype_match=False, iterable="fullgraph_check", iterable_property=(GraphProperty.Oriented,))
 def parents_per_vertice_constraint(exact_parents):
+    @assert_first_arg_is_graph_decorator
+    @construct_default_behavior(nodetype_match=False, edgetype_match=False, iterable="fullgraph_check",
+                                iterable_property=(GraphProperty.Directed,))
     def sub(current_graph, elements_to_add=None):
         assert elements_to_add==None, "elements_to_add not None should not happen in parents_per_vertice_constraint with decorator"
         for node in current_graph.nodes():
-            if len(node.ancestors(1)) != exact_parents:
+            if current_graph.parents_number(node) != exact_parents:
                 return False
         return True
     return sub
 
 
-@assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.Oriented,))
 def max_children_per_vertice_constraint(max_children):
+    @assert_first_arg_is_graph_decorator
+    @construct_default_behavior(nodetype_match=True, iterable="fullgraph_check",
+                                iterable_property=(GraphProperty.Directed,))
     def sub(current_graph, elements_to_add=None):
         match elements_to_add:
-            case current_graph.__edgetype__():  # passed argument is edge
+            case Edge():  # passed argument is edge
                 base_node = elements_to_add.source
-                children = set(base_node.descendants(1))
+                children = set(current_graph.descendants(base_node, 1))
                 if elements_to_add.target in children:
                     return True
                 if len(children) + 1 > max_children:
@@ -249,25 +255,28 @@ def max_children_per_vertice_constraint(max_children):
                 return True
             case None:
                 for node in current_graph.nodes():
-                    if len(node.descendants(1)) > max_children:
+                    direct_children = set(current_graph.descendants(node, 1))
+                    print(direct_children)
+                    if len(direct_children) > max_children:
                         return False
                 return True
             case _:
                 raise Exception(
-                    f"Should not happen, error within construct_default_behavior in max_children_per_vertice_constraint")
+                    "Should not happen, error within construct_default_behavior in max_children_per_vertice_constraint")
     return sub
 
 
-@assert_first_arg_is_graph_decorator
-@construct_default_behavior(nodetype_match=True, iterable="fullgraph_check", iterable_property=(GraphProperty.NonOriented,))
 def max_vertice_degree_constraint(max_neighbours):
+    @assert_first_arg_is_graph_decorator
+    @construct_default_behavior(nodetype_match=True, iterable="fullgraph_check",
+                                iterable_property=(GraphProperty.NonDirected,))
     def sub(current_graph, elements_to_add=None):
         match elements_to_add:
-            case current_graph.__edgetype__():  # passed argument is edge
+            case Edge():  # passed argument is edge
                 base_node1 = elements_to_add.source
-                children1 = set(base_node1.closure(1))
+                children1 = set(current_graph.closure(base_node1, 1))
                 base_node2 = elements_to_add.target
-                children2 = set(base_node2.closure(1))
+                children2 = set(current_graph.closure(base_node2, 1))
                 if elements_to_add.target in children1:
                     assert elements_to_add.source in children2, "Should really never happen, closure are supposed to be reflexive"
                     return True                 # already an edge between base_node1 and base_node2
@@ -277,8 +286,9 @@ def max_vertice_degree_constraint(max_neighbours):
                     return False
                 return True
             case None:
+                print(dir(current_graph))
                 for node in current_graph.nodes():
-                    if len(node.closure(1)) > max_neighbours:
+                    if len(current_graph.closure(node, 1)) > max_neighbours:
                         return False
                 return True
             case _:

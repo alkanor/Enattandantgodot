@@ -1,4 +1,4 @@
-from .graph_constraints import acyclic_oriented_constraint, acyclic_non_oriented_constraint, \
+from .graph_constraints import acyclic_directed_constraint, acyclic_non_directed_constraint, \
                                weakly_connected_constraint, strongly_connected_constraint, connected_constraint, \
                                max_parents_per_vertice_constraint, parents_per_vertice_constraint, \
                                max_children_per_vertice_constraint, \
@@ -14,15 +14,15 @@ class ConstraintException(Exception):
 
 GraphPropertyConstraints = {
 
-    GraphProperty.Oriented: None,
-    GraphProperty.NonOriented: None,
+    GraphProperty.Directed: None,
+    GraphProperty.NonDirected: None,
 
-    GraphProperty.AcyclicOriented: ((Graph.add_edge.__name__,
+    GraphProperty.AcyclicDirected: ((Graph.add_edge.__name__,
                                      Graph.add_child.__name__,),
-                                    acyclic_oriented_constraint),
-    GraphProperty.AcyclicNonOriented: ((Graph.add_edge.__name__,
+                                    acyclic_directed_constraint),
+    GraphProperty.AcyclicNonDirected: ((Graph.add_edge.__name__,
                                         Graph.add_child.__name__,),
-                                       acyclic_non_oriented_constraint),
+                                       acyclic_non_directed_constraint),
     GraphProperty.NonAcyclic: None,
 
     GraphProperty.WeaklyConnected: ((Graph.add_node.__name__,

@@ -1,3 +1,5 @@
+from .property_graph_extensions import property_extensions
+import types
 
 """
 Base Graph object, which will be the core of many other ones
@@ -45,6 +47,9 @@ class Node:
         assert type(val) == type(self.__value), "Node value type can't change once fixed"  # ensure the node type always remain the same
         self.__value = val
 
+    def __repr__(self):
+        return f"{self.__value}"
+
 
 class Edge:
     __slots__ = ['__source', '__target', '__value']
@@ -73,12 +78,14 @@ class Edge:
 
     @property
     def target(self):
-        return self.__source
+        return self.__target
 
     @target.setter
     def target(self, val):
         raise AttributeError("Target node in a given edge is immutable")
 
+    def __repr__(self):
+        return f"{self.__source} < {self.__value} > {self.__target}"
 
 
 class ConstraintNotFulfilled(Exception):
@@ -88,17 +95,62 @@ class ConstraintNotFulfilled(Exception):
 
 class Graph:
 
-    def __init__(self, nodeType=None, edgeType=None, constraints=None):
+    def __init__(self, nodeType=None, edgeType=None, properties=None):
         self.__nodetype = nodeType
         self.__edgetype = edgeType
-        self.__constraints = constraints
         self.__nodes = set()
         self.__per_node = {}
         self.__reverse_per_node = {}
 
+        extended_properties_set = extend_properties_from_dependancies(properties)
+        self.__properties = extended_properties_set
+        check_properties_compatibility(self.__properties)
+        self.__constraints = {GraphPropertyConstraints[property] for property in extended_properties_set if GraphPropertyConstraints[property]}
+
+        for name, method in property_extensions(self.__properties):
+            self.__addmethod(method, name)
+
+
+    @property
+    def nodetype(self):
+        return self.__nodetype
+
+    @nodetype.setter
+    def nodetype(self, val):
+        raise AttributeError("Nodetype for any graph is immutable")
+
+    @property
+    def edgetype(self):
+        return self.__edgetype
+
+    @edgetype.setter
+    def edgetype(self, val):
+        raise AttributeError("Edgetype for any graph is immutable")
+
+    def __addmethod(self, method, name):  # this method is used to add dynamic methods according to the graph properties
+        self.__dict__[name] = types.MethodType(method, self)
+
+
+    def nodes(self):
+        yield from self.__nodes
+
+    def edges(self):
+        for source in self.__per_node:
+            for target, edgeval in self.__per_node[source]:
+                yield Edge(source, target, edgeval)
+
+    # def per_node(self, node):
+    #     return self.__per_node[node]
+    #
+    # def per_rev_node(self, node):
+    #     return self.__reverse_per_node[node]
+
+
+    def has_property(self, property):
+        return property in self.__properties
 
     def check_constraints(self, method_name=False, *args):
-        for methods, constraint in self.constraints:
+        for methods, constraint in self.__constraints:
             if method_name in methods or not method_name:
                 if not constraint(self, *args):
                     raise ConstraintNotFulfilled(constraint)
@@ -106,21 +158,21 @@ class Graph:
 
     def check_node(self, node):
         assert type(node) == Node, "Expecting real node type as argument"
-        assert not self.__nodetype or type(node.__value) == self.__nodetype, "Expecting node base type to be of type graph node type which is not none"
+        assert not self.__nodetype or type(node.nodeval) == self.__nodetype, f"Expecting node base type to be of type graph node type which is not none ({self.__nodetype})"
 
     def check_edge(self, edge):
         assert type(edge) == Edge, "Expecting real edge type as argument"
-        assert not self.__edgetype or type(edge.__value) == self.__edgetype, "Expecting node base type to be of type graph edge type which is not none"
+        assert not self.__edgetype or type(edge.edgeval) == self.__edgetype, f"Expecting node base type to be of type graph edge type which is not none ({self.__edgetype})"
         # self.check_node(edge.source) # overkill because we check nodes are in nodes set
         # self.check_node(edge.target)  # overkill because we check nodes are in nodes set
         assert edge.source in self.__nodes, "Edge composed of nodes that are not in the graph node set (source)"
         assert edge.target in self.__nodes, "Edge composed of nodes that are not in the graph node set (target)"
 
     def check_target(self, target):
-        assert not self.__nodetype or type(target) == self.__nodetype, "Expecting target to be of type graph node type or graph node type to be none"
+        assert not self.__nodetype or type(target) == self.__nodetype, f"Expecting target to be of type graph node type ({self.__nodetype}) or graph node type to be none"
 
     def check_edgeval(self, edgeval):
-        assert not self.__edgetype or type(edgeval) == self.__edgetype, "Expecting edge value to be of type graph edge type or graph edge type to be none"
+        assert not self.__edgetype or type(edgeval) == self.__edgetype, f"Expecting edge value to be of type graph edge type ({self.__edgetype}) or graph edge type to be none"
 
 
 
@@ -143,21 +195,22 @@ class Graph:
         self.check_edge(edge)
         self.check_constraints(Graph.add_edge.__name__, edge)
 
-        self.per_node.setdefault(edge.source, []).append((edge.target, edge.__value))
-        self.reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.__value))
+        self.__per_node.setdefault(edge.source, []).append((edge.target, edge.edgeval))
+        self.__reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.edgeval))
 
 
     def add_link(self, source, target, edgeval=None): # same that add_edge but with no edge struct
         self.check_node(source)
         self.check_node(target)
+        self.check_edgeval(edgeval)
         assert source in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (source)"
         assert target in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (target)"
 
         edge = Edge(source, target, edgeval)
         self.check_constraints(Graph.add_edge.__name__, edge)
 
-        self.per_node.setdefault(source, []).append((target, edgeval))
-        self.reverse_per_node.setdefault(target, []).append((source, edgeval))
+        self.__per_node.setdefault(source, []).append((target, edgeval))
+        self.__reverse_per_node.setdefault(target, []).append((source, edgeval))
         return edge
 
 
@@ -165,7 +218,7 @@ class Graph:
         self.check_target(nodeval)
 
         node = Node(nodeval if self.__nodetype else None)
-        self.check_constraints(Graph.add_ndoe.__name__, node)
+        self.check_constraints(Graph.add_node.__name__, node)
 
         self.__nodes.add(node)
         return node
@@ -236,8 +289,8 @@ class Graph:
         self.check_constraints(Graph.add_edge.__name__, edges_list)
 
         for edge in edges_list:
-            self.per_node.setdefault(edge.source, []).append((edge.target, edge.__value))
-            self.reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.__value))
+            self.__per_node.setdefault(edge.source, []).append((edge.target, edge.edgeval))
+            self.__reverse_per_node.setdefault(edge.target, []).append((edge.source, edge.edgeval))
         return edges_list
 
 
@@ -246,6 +299,7 @@ class Graph:
         for source, target, edgeval in sources_targets_edgevals_list:
             self.check_node(source)
             self.check_node(target)
+            self.check_edgeval(edgeval)
             assert source in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (source)"
             assert target in self.__nodes, "Attempt to add an edge composed of nodes that are not in the graph node set (target)"
 
@@ -253,8 +307,8 @@ class Graph:
         self.check_constraints(Graph.add_edge.__name__, edges)
 
         for source, target, edgeval in sources_targets_edgevals_list:
-            self.per_node.setdefault(source, []).append((target, edgeval))
-            self.reverse_per_node.setdefault(target, []).append((source, edgeval))
+            self.__per_node.setdefault(source, []).append((target, edgeval))
+            self.__reverse_per_node.setdefault(target, []).append((source, edgeval))
         return edges
 
 
@@ -264,7 +318,7 @@ class Graph:
             self.check_target(nodeval)
 
         nodes = [Node(nodeval if self.__nodetype else None) for nodeval in nodevals_list]
-        self.check_constraints(Graph.add_ndoe.__name__, nodes)
+        self.check_constraints(Graph.add_node.__name__, nodes)
 
         self.__nodes.update(nodes)
         return nodes
@@ -416,7 +470,7 @@ class Graph:
                 per_nodes.setdefault(node1, []).append((node2, val))
                 rev_per_nodes.setdefault(node2, []).append((node1, val))
 
-        base_graph = Graph_from_properties(additional_properties)
+        base_graph = Graph(nodeType, edgeType, additional_properties)
         base_graph.__nodes = nodes
         base_graph.__per_nodes = per_nodes
         base_graph.__reverse_per_node = rev_per_nodes
@@ -434,10 +488,13 @@ from .graph_property import GraphProperty
 
 
 def extend_properties_from_dependancies(properties):
+    if properties is None:
+        return set()
     properties_set = set([properties] if type(properties) == GraphProperty else properties)
     extended_properties_set = set(properties_set)
     for property in properties_set:
-        extended_properties_set = extended_properties_set.union(GraphPropertyDependancies[property])
+        if GraphPropertyDependancies[property]:
+            extended_properties_set = extended_properties_set.union(GraphPropertyDependancies[property])
     return extended_properties_set
 
 
@@ -447,19 +504,11 @@ def check_properties_compatibility(properties=None):
 
     assert type(properties) == GraphProperty or hasattr(properties, "__iter__"), "properties argument need to be a property iterable or a property"
 
-    extended_properties_set = extend_properties_from_dependancies(properties)
     index_in_properties_partition = [[(property, i) for i, partition in enumerate(GraphPropertiesPartition) if property in partition]
-                                        for property in extended_properties_set]
+                                        for property in properties]
     index_list = []
     for T_index in index_in_properties_partition:
         assert len(T_index) == 1, "The indicated property is not in the known GraphPropertiesPartition of all graph properties"
         index_list.append(T_index[0])
 
     assert len(index_list) == len(set(index_list)), f"At least 2 properties are incompatible, see index repetition in {index_in_properties_partition}"
-
-
-def Graph_from_properties(nodeType=None, edgeType=None, properties=None):
-    check_properties_compatibility(properties)
-    extended_properties_set = extend_properties_from_dependancies(properties)
-    related_constraints = {GraphPropertyConstraints[property] for property in extended_properties_set}
-    return Graph(nodeType, edgeType, related_constraints)

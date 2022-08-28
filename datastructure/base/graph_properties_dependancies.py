@@ -3,15 +3,15 @@ from .graph_property import GraphProperty
 
 # properties partition, any graph can only have one property for each property type
 GraphPropertiesPartition = [
-    (GraphProperty.Oriented, GraphProperty.NonOriented,),
-    (GraphProperty.AcyclicOriented, GraphProperty.AcyclicNonOriented, GraphProperty.NonAcyclic,),
+    (GraphProperty.Directed, GraphProperty.NonDirected,),
+    (GraphProperty.AcyclicDirected, GraphProperty.AcyclicNonDirected, GraphProperty.NonAcyclic,),
     (GraphProperty.WeaklyConnected, GraphProperty.StronglyConnected, GraphProperty.Connected, GraphProperty.NonConnected,),
-    (*[property for property in GraphProperty if
-       property.value >= GraphProperty.LessThanOneParent.value and property.value <= GraphProperty.NoParentConstraint]),
-    (*[property for property in GraphProperty if
-       property.value >= GraphProperty.Binary.value and property.value <= GraphProperty.NoChildConstraint]),
-    (*[property for property in GraphProperty if
-       property.value >= GraphProperty.VerticeDegreeOne.value and property.value <= GraphProperty.NoVerticeDegreeConstraint]),
+    tuple([property for property in GraphProperty if
+            property.value >= GraphProperty.LessThanOneParent.value and property.value <= GraphProperty.NoParentConstraint.value]),
+    tuple([property for property in GraphProperty if
+            property.value >= GraphProperty.Binary.value and property.value <= GraphProperty.NoChildConstraint.value]),
+    tuple([property for property in GraphProperty if
+            property.value >= GraphProperty.VerticeDegreeOne.value and property.value <= GraphProperty.NoVerticeDegreeConstraint.value]),
 ]
 
 GraphPropertyTypes = {
@@ -23,22 +23,22 @@ GraphPropertyDependancies = {
     prop: None for prop in GraphProperty
 }
 
-GraphPropertyDependancies[GraphProperty.AcyclicOriented] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.AcyclicNonOriented] = (GraphProperty.NonOriented,)
+GraphPropertyDependancies[GraphProperty.AcyclicDirected] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.AcyclicNonDirected] = (GraphProperty.NonDirected,)
 
-GraphPropertyDependancies[GraphProperty.WeaklyConnected] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.StronglyConnected] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.Connected] = (GraphProperty.NonOriented,)
+GraphPropertyDependancies[GraphProperty.WeaklyConnected] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.StronglyConnected] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.Connected] = (GraphProperty.NonDirected,)
 
-GraphPropertyDependancies[GraphProperty.LessThanOneParent] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.OneParentExactly] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.LessThanTwoParents] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.NoParentConstraint] = (GraphProperty.Oriented,)
+GraphPropertyDependancies[GraphProperty.LessThanOneParent] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.OneParentExactly] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.LessThanTwoParents] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.NoParentConstraint] = (GraphProperty.Directed,)
 
-GraphPropertyDependancies[GraphProperty.Binary] = (GraphProperty.Oriented,)
-GraphPropertyDependancies[GraphProperty.NoChildConstraint] = (GraphProperty.Oriented,)
+GraphPropertyDependancies[GraphProperty.Binary] = (GraphProperty.Directed,)
+GraphPropertyDependancies[GraphProperty.NoChildConstraint] = (GraphProperty.Directed,)
 
-GraphPropertyDependancies[GraphProperty.VerticeDegreeOne] = (GraphProperty.NonOriented,)
-GraphPropertyDependancies[GraphProperty.VerticeDegreeTwo] = (GraphProperty.NonOriented,)
-GraphPropertyDependancies[GraphProperty.VerticeDegreeThree] = (GraphProperty.NonOriented,)
-GraphPropertyDependancies[GraphProperty.NoVerticeDegreeConstraint] = (GraphProperty.NonOriented,)
+GraphPropertyDependancies[GraphProperty.VerticeDegreeOne] = (GraphProperty.NonDirected,)
+GraphPropertyDependancies[GraphProperty.VerticeDegreeTwo] = (GraphProperty.NonDirected,)
+GraphPropertyDependancies[GraphProperty.VerticeDegreeThree] = (GraphProperty.NonDirected,)
+GraphPropertyDependancies[GraphProperty.NoVerticeDegreeConstraint] = (GraphProperty.NonDirected,)

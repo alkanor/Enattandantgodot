@@ -3,11 +3,11 @@ from enum import Enum
 
 class GraphProperty(Enum):
 
-    Oriented = 2,
-    NonOriented = 3,         # default case related to orientation
+    Directed = 2,
+    NonDirected = 3,         # default case related to orientation
 
-    AcyclicOriented = 4,
-    AcyclicNonOriented = 5,
+    AcyclicDirected = 4,
+    AcyclicNonDirected = 5,
     NonAcyclic = 7,          # default case related to cycles
 
     WeaklyConnected = 8,     # for Oriented graph, weakly connected = associated non oriented graph is connected
