@@ -29,3 +29,15 @@ class GraphProperty(Enum):
     VerticeDegreeTwo = 65,
     VerticeDegreeThree = 66,
     NoVerticeDegreeConstraint = 127,
+
+    # misc
+    EquivalentTreeAcyclic = 0x800  # on a tree, (but directed, so weakly connected), the related tree (not directed) is acyclic
+
+    # properties mix
+    Forest = 0x1000
+    #PolyForest = 0x1001
+    PolyArborescence = 0x1002
+    DAG = 0x1003
+    Tree = 0x1004
+    Arborescence = 0x1005
+    #PolyTree = 0x1006

@@ -447,7 +447,7 @@ class Graph:
 
         for element in all_elements:
             if type(element) == Node:
-                if nodeType is None and type(element.nodeval) is not None:  # forcing the node type is previously undetected
+                if nodeType is None and type(element.nodeval) is not None:  # forcing the node type if previously undetected
                     nodeType = type(element.nodeval)
                 assert nodeType is None or type(element.nodeval) == nodeType, f"Bad type when trying to parse node, expected {nodeType} got {type(element.nodeval)}"
                 nodes.add(element)

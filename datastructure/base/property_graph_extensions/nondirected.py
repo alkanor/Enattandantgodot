@@ -8,21 +8,21 @@ It expects:
 """
 
 
-def recursive_traversal(self, basenode, depth=-1, bfs=True, state=None, base_depth=-1, return_origin=False):
-    if not depth:
-        yield basenode
-        return
-    if state is None:
-        state = set()
-        #state.add(basenode)
-    if bfs and (return_origin or base_depth == depth):
-        yield basenode
-    for node, edgeval in self._Graph__per_node[basenode]+self._Graph__reverse_per_node[basenode]:  # trickery to access "private like" member of Graph (called from this dynamically added func)
-        if node not in state:
-            state.add(node)
-            yield from recursive_traversal(self, node, depth - 1, bfs, state, base_depth, return_origin)
-    if not bfs and (return_origin or base_depth == depth):
-        yield basenode
+# def recursive_traversal(self, basenode, depth=-1, bfs=True, state=None, base_depth=-1, return_origin=False):
+#     if not depth:
+#         yield basenode
+#         return
+#     if state is None:
+#         state = set()
+#         #state.add(basenode)
+#     if bfs and (return_origin or base_depth == depth):
+#         yield basenode
+#     for node, edgeval in self._Graph__per_node[basenode]+self._Graph__reverse_per_node[basenode]:  # trickery to access "private like" member of Graph (called from this dynamically added func)
+#         if node not in state:
+#             state.add(node)
+#             yield from recursive_traversal(self, node, depth - 1, bfs, state, base_depth, return_origin)
+#     if not bfs and (return_origin or base_depth == depth):
+#         yield basenode
 
 
 def iterative_traversal(self, basenode, max_depth=-1, bfs=True, return_origin=False):

@@ -42,3 +42,11 @@ GraphPropertyDependancies[GraphProperty.VerticeDegreeOne] = (GraphProperty.NonDi
 GraphPropertyDependancies[GraphProperty.VerticeDegreeTwo] = (GraphProperty.NonDirected,)
 GraphPropertyDependancies[GraphProperty.VerticeDegreeThree] = (GraphProperty.NonDirected,)
 GraphPropertyDependancies[GraphProperty.NoVerticeDegreeConstraint] = (GraphProperty.NonDirected,)
+
+GraphPropertyDependancies[GraphProperty.Forest] = (GraphProperty.AcyclicNonDirected,)
+#GraphPropertyDependancies[GraphProperty.PolyForest] = (GraphProperty.AcyclicDirected, GraphProperty.EquivalentTreeAcyclic)
+GraphPropertyDependancies[GraphProperty.PolyArborescence] = (GraphProperty.AcyclicDirected, GraphProperty.LessThanOneParent)
+GraphPropertyDependancies[GraphProperty.DAG] = (GraphProperty.AcyclicDirected, GraphProperty.WeaklyConnected)
+GraphPropertyDependancies[GraphProperty.Tree] = (GraphProperty.AcyclicNonDirected, GraphProperty.Connected)
+GraphPropertyDependancies[GraphProperty.Arborescence] = (GraphProperty.AcyclicDirected, GraphProperty.WeaklyConnected, GraphProperty.LessThanOneParent)
+#GraphPropertyDependancies[GraphProperty.PolyTree] = (GraphProperty.AcyclicDirected, GraphProperty.WeaklyConnected, GraphProperty.EquivalentTreeAcyclic)

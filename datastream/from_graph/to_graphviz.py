@@ -10,11 +10,11 @@ def process_node(node_to_index, nodes, G, node):
     return node_to_index[node]
 
 
-def Graph_to_graphviz(graph, engine='sfdp'):
+def graph_to_graphviz(graph, engine='sfdp'):
     if graph.has_property(GraphProperty.Directed):
-        G = graphviz.Digraph(engine=engine)
+        g = graphviz.Digraph(engine=engine)
     else:
-        G = graphviz.Graph(engine=engine)
+        g = graphviz.Graph(engine=engine)
 
     node_to_index = {}
     nodes = []
@@ -22,15 +22,15 @@ def Graph_to_graphviz(graph, engine='sfdp'):
     for element in graph.iterate():
         match element:
             case Node():
-                process_node(node_to_index, nodes, G, element)
+                process_node(node_to_index, nodes, g, element)
             case Edge():
-                n1 = process_node(node_to_index, nodes, G, element.source)
-                n2 = process_node(node_to_index, nodes, G, element.target)
+                n1 = process_node(node_to_index, nodes, g, element.source)
+                n2 = process_node(node_to_index, nodes, g, element.target)
                 if element.edgeval is not None:
-                    edges.append(G.edge(str(n1), str(n2), str(element.edgeval)))
+                    edges.append(g.edge(str(n1), str(n2), str(element.edgeval)))
                 else:
-                    edges.append(G.edge(str(n1), str(n2)))
+                    edges.append(g.edge(str(n1), str(n2)))
             case _:
                 assert type(element) == type or element is None, f"Expecting at least a type when not node nor edge for {type(element)}"
 
-    return G
+    return g
