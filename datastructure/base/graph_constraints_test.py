@@ -13,12 +13,12 @@ if __name__ == "__main__":
     edges2 = [g2.add_link(nodes2[a], nodes2[b]) for a, b in edgelist]
 
 
-    from datastream.from_graph.to_graphviz import graph_to_graphviz
-    from datastream.from_graphviz.to_fs import Graphviz_to_fs
+    from datastream.converter.from_graph.to_graphviz import graph_to_graphviz
+    from datastream.converter.from_graphviz.to_fs import graphviz_to_fs
 
-    #Graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output', True)
-    Graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output_directed')
-    Graphviz_to_fs(graph_to_graphviz(g2), 'doctest-output/output_nondirected')
+    #graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output', True)
+    graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output_directed')
+    graphviz_to_fs(graph_to_graphviz(g2), 'doctest-output/output_nondirected')
 
     from .graph_constraints import acyclic_directed_constraint, acyclic_non_directed_constraint, \
         weakly_connected_constraint, strongly_connected_constraint, connected_constraint, \
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     print(g.edges_number())
     print(strongly_connected_constraint(g))
     print(weakly_connected_constraint(g))
-    Graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output_directed2')
+    graphviz_to_fs(graph_to_graphviz(g), 'doctest-output/output_directed2')
 
     print("\nthen back to normal")
     g.del_edge(Edge(nodes[5], nodes[8]))

@@ -404,6 +404,10 @@ class Graph:
         for node in self.__per_node:
             yield from [Edge(node, target, edgeval) for target, edgeval in self.__per_node[node]]
 
+    def __iter__(self):
+        return self.iterate()
+
+
     """
     Reconstructing a graph:
      * graph_generator must return all nodes and edges of the graph to reconstruct

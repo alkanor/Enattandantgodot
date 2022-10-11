@@ -8,7 +8,7 @@ class MetaCreateTableWhenEngine(DeclarativeMeta):
     def __init__(cls, name, bases, dict):
         super().__init__(name, bases, dict)
 
-        from model_to_disk import get_engine
+        from persistent_to_disk import get_engine
         if get_engine():
             cls.metadata.create_all(get_engine())
 

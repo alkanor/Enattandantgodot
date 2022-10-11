@@ -21,7 +21,7 @@ def NAMED_DATE_METADATA(metadated_classname):
 
 
 if __name__ == "__main__":
-    from model_to_disk import create_session
+    from persistent_to_disk import create_session
     from persistent.base_type import _String
 
     session = create_session()

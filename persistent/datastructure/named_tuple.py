@@ -62,7 +62,7 @@ def NAMED_TUPLE(**NamedSQLAlchemyBaseTypes):
 
 
 if __name__ == "__main__":
-    from model_to_disk import create_session
+    from persistent_to_disk import create_session
     from persistent.base_type import BasicEntity, _Integer, _String, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError

@@ -127,7 +127,7 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
 
 
 if __name__ == "__main__":
-    from model_to_disk import create_session
+    from persistent_to_disk import create_session
     from persistent.base_type import BasicEntity, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError, InvalidRequestError

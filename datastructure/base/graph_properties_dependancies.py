@@ -14,9 +14,11 @@ GraphPropertiesPartition = [
             property.value >= GraphProperty.VerticeDegreeOne.value and property.value <= GraphProperty.NoVerticeDegreeConstraint.value]),
 ]
 
+partitionedProperties = set([i for x in GraphPropertiesPartition for i in x])
+
 GraphPropertyTypes = {
     property: [index for index, prop_tuple in enumerate(GraphPropertiesPartition) if property in prop_tuple][0]
-    for property in GraphProperty
+    for property in GraphProperty if property in partitionedProperties
 }
 
 GraphPropertyDependancies = {
