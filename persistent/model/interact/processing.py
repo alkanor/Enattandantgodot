@@ -10,15 +10,16 @@ __objectname__ = "PROCESSING"
 
 
 #@register_args({"QueryType": Query, "StatusType": Status, "StateType": State}) # TODO: global type system registration for graph representation
-@register_type(__objectname__, lambda QueryType, StatusType, StateType: (QueryType.__tablename__, StatusType.__tablename__, StateType.__tablename__))
+@register_type(__objectname__, lambda QueryType, StatusType, StateType = None:
+                                      (QueryType.__tablename__, StatusType.__tablename__, StateType.__tablename__ if StateType else None))
 def PROCESSING(QueryType, StatusType, StateType = None):
 
     if StateType:
         processing_tablename = f'{__objectname__}<{QueryType.__tablename__},{StatusType.__tablename__},{StateType.__tablename__}>'
+        ChangeClassNameBase, _ = BaseAndMetaChangeClassName(QueryType, StatusType, StateType)
     else:
         processing_tablename = f'{__objectname__}<{QueryType.__tablename__},{StatusType.__tablename__}>'
-
-    ChangeClassNameBase, _ = BaseAndMetaChangeClassName(QueryType, StatusType, StateType)
+        ChangeClassNameBase, _ = BaseAndMetaChangeClassName(QueryType, StatusType)
 
     class PROCESSING_OBJECT(ChangeClassNameBase):
         __tablename__ = processing_tablename
@@ -48,7 +49,7 @@ def PROCESSING(QueryType, StatusType, StateType = None):
         if StateType:
             @declared_attr
             def state(cls):
-                return relationship(StateType, foreign_keys=[cls.state])
+                return relationship(StateType, foreign_keys=[cls.state_id])
 
         @property
         def questioned_object(self):
@@ -103,14 +104,14 @@ if __name__ == "__main__":
         "status": Column(String(STRING_SIZE), unique=True),
     }
 
-    Status = BasicEntity("status", columns)
+    STATUS = BasicEntity("status", columns)
 
     columns = {
         "id": Column(Integer, primary_key=True),
         "state": Column(String(STRING_SIZE), unique=True),
     }
 
-    State = BasicEntity("state", columns)
+    STATE = BasicEntity("state", columns)
 
 
     session = create_session()
@@ -124,10 +125,13 @@ if __name__ == "__main__":
     i2 = QuestionedObject.GET_CREATE(session, graphid=10)
     i3 = QuestionedObject.GET_CREATE(session, graphid=100)
 
-    start = Status.GET_CREATE(session, status="starting")
-    progress = Status.GET_CREATE(session, status="in progress")
-    ended = Status.GET_CREATE(session, status="finished")
+    start = STATUS.GET_CREATE(session, status="starting")
+    progress = STATUS.GET_CREATE(session, status="in progress")
+    ended = STATUS.GET_CREATE(session, status="finished")
 
+    s1 = STATE.GET_CREATE(session, state="state1")
+    s2 = STATE.GET_CREATE(session, state="state2")
+    s3 = STATE.GET_CREATE(session, state="state3")
 
     QUERY_TYPE = QUERY(QuestionedObject, Question)
 
@@ -135,26 +139,26 @@ if __name__ == "__main__":
     q2 = QUERY_TYPE.GET_CREATE(session, question=v2, questioned_object=i1)
     q3 = QUERY_TYPE.GET_CREATE(session, question=v1, questioned_object=i3)
 
-    print(q1.id)
-    print(yes.id)
+    PROCESSING_TYPE1 = PROCESSING(QUERY_TYPE, STATUS, STATE)
+    PROCESSING_TYPE2 = PROCESSING(QUERY_TYPE, STATUS)
 
-    ANSWER_TYPE = ANSWER(QUERY_TYPE, Answer)
-
-    a1 = ANSWER_TYPE.GET_CREATE(session, query=q1, answer=yes)
-    a2 = ANSWER_TYPE.GET_CREATE(session, query=q2, answer=yes)
-    a3 = ANSWER_TYPE.GET_CREATE(session, query=q3, answer=no)
+    a1 = PROCESSING_TYPE1.GET_CREATE(session, query=q1, status=start, state=s1)
+    a2 = PROCESSING_TYPE1.GET_CREATE(session, query=q2, status=ended)
+    a3 = PROCESSING_TYPE2.GET_CREATE(session, query=q3, status=progress)
 
     print(a1)
     print(a2)
     print(a3)
 
     print(a1.query)
-    print(a1.answer)
+    print(a1.status)
+    print(a1.state)
     print(a1.question)
     print(a1.questioned_object)
 
-    a1.question = v4
+    print(a3.query)
+    print(a3.status)
     try:
-        session.commit()
-    except IntegrityError:
-        print("Normal integrity error when resetting the question (question + questioned object already in a query)")
+        print(a3.state)
+    except AttributeError:
+        print("Normal lack of state attribute due to type construction for PROCESSING_TYPE2")

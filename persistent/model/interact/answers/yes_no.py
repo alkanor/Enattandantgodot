@@ -1,8 +1,8 @@
-from .response_statement import ResponseStatement
+from .answer_statement import AnswerStatement
 from enum import Enum
 
 
 class YesNo(Enum):
 
-    YES = ResponseStatement.GET_CREATE("YES")
-    NO = ResponseStatement.GET_CREATE("NO")
+    YES = AnswerStatement.GET_CREATE("YES")
+    NO = AnswerStatement.GET_CREATE("NO")

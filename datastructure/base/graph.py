@@ -152,6 +152,9 @@ class Graph:
     def has_property(self, property):
         return property in self.__properties
 
+    def properties(self):
+        return list(self.__properties)
+
     def check_constraints(self, method_name=False, *args):
         for methods, constraint in self.__constraints:
             if method_name in methods or not method_name:

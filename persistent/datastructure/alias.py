@@ -36,8 +36,8 @@ def _update_metadata(session, aliastype):
 
 
 
-@register_type("ALIAS", lambda basetype, alias_name: (basetype.__tablename__, alias_name))
-def ALIAS(SQLAlchemyBaseType, alias_name):
+@register_type("ALIAS", lambda basetype, alias_name, session=None: (basetype.__tablename__, alias_name, repr(type(session))))
+def ALIAS(SQLAlchemyBaseType, alias_name, session=None):
 
     is_base_sqlalchemy_type = SQLAlchemyBaseType.__dict__.get("id", None) is not None # this condition may not be the best to differentiate SQLAlchemy classes and non-sqlalchemy ones
     base_type = SQLAlchemyBaseType if is_base_sqlalchemy_type else SQLAlchemyBaseType.__metadataclass__ # but this will throws an error if non SQLAlchemy class is not metadata one
@@ -92,11 +92,12 @@ def ALIAS(SQLAlchemyBaseType, alias_name):
             super().__init__(alias_id=self.target.id if is_base_sqlalchemy_type else self.target.metadata.id)
 
         @reconstructor
-        def init_on_load(self):
+        def init_on_load(self, *args):
             if is_base_sqlalchemy_type:
                 assert(self.orm_obj.__class__ == SQLAlchemyBaseType)
                 self.target = self.orm_obj
             else:
+                assert session, f"Session is require while constructing alias from sqlalchemy reconstructor for type {SQLAlchemyBaseType}"
                 self.target = SQLAlchemyBaseType(session, self.orm_obj)
             self.copy_aliased_attributes()
         
