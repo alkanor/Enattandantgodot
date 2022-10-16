@@ -25,7 +25,7 @@ def _DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_con
 
 
 @register_type(__objectname__, _DEPENDANCIES)
-def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_construct_metadata):
+def MetadatedType(SQLAlchemyBaseType, MetadataType=None, *additional_args_to_construct_metadata):
     metaclass_tablename, object_tablename = _DEPENDANCIES(SQLAlchemyBaseType, MetadataType=None,
                                                             *additional_args_to_construct_metadata)
 
@@ -33,6 +33,7 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
         MetadataClass = NAMED_DATE_METADATA(SQLAlchemyBaseType.__tablename__)
     else:
         MetadataClass = MetadataType(SQLAlchemyBaseType.__tablename__, *additional_args_to_construct_metadata)
+
 
     assert (metaclass_tablename == MetadataClass.__tablename__)
 
@@ -59,6 +60,7 @@ def MetadatedType(SQLAlchemyBaseType,  MetadataType=None, *additional_args_to_co
     class _METADATED_OBJECT(baseclass_for_metadata(MetadataClass)):
 
         __metadataclass__ = MetadataClass
+        __metadataentry__ = _METADATED_ENTRY
 
         def __init__(self, *args, **argv):
             if not args: # no session, so basic sqlalchemy construction

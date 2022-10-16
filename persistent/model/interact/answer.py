@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.orm import relationship, declared_attr
 
 from persistent.datastructure.metadated import MetadatedType
 from persistent.base import BaseAndMetaChangeClassName
 from persistent.type_system import register_type
+from persistent.base_type import BasicEntity
 
 
 __objectname__ = "ANSWER"
@@ -70,7 +71,7 @@ def MetadatedAnswer(QueryType, AnswerType, *args):
 
 if __name__ == "__main__":
     from persistent_to_disk import create_session
-    from persistent.base_type import BasicEntity, _Integer, STRING_SIZE
+    from persistent.base_type import STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy import String, Integer

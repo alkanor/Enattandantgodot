@@ -27,10 +27,10 @@ def sqlalchemy_to_dict(sqlalch_obj, ctxt=None):
 
 
 def answerstatement_to_dict(sqlalch_obj, ctxt=None):
-    from enum import Enum
-    if isinstance(sqlalch_obj, Enum): # we have the base Enum type, returns the description
-        out_dict = {"choices": [entry.name for entry in sqlalch_obj]}
-        out_dict.update({"type": sqlalch_obj.__classname__})
+    from enum import EnumMeta
+    if isinstance(sqlalch_obj, EnumMeta): # we have the base Enum type, returns the description
+        out_dict = {"choices": [entry for entry in sqlalch_obj.__dict__ if entry[0] != '_']}
+        out_dict.update({"type": sqlalch_obj.__class__.__name__})
         if ctxt and isinstance(ctxt, dict):
             if "exclusive" in ctxt:
                 out_dict.update({"exclusive": True})
@@ -39,4 +39,4 @@ def answerstatement_to_dict(sqlalch_obj, ctxt=None):
             if "min_choices" in ctxt:
                 out_dict.update({"min_choices": ctxt["min_choices"]})
         return out_dict
-    return sqlalch_obj.name           # else returns the enum value name
+    return sqlalch_obj.orm_obj.id      # else returns the enum value name

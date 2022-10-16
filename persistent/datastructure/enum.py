@@ -1,8 +1,3 @@
-from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy import Column, Integer, ForeignKey, delete
-from sqlalchemy.orm import relationship, reconstructor
-
-from persistent.base import Base, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
 from persistent.type_system import register_type
 from persistent.base_type.string import String
 
@@ -27,7 +22,9 @@ def ENUM(enum_name, enum_values, session):
         s2 = set(enum_values)
         assert s1 == s2, f"Unmatched set for DB enum {enum_name}: {s1} in DB and {s2} asked"
 
-    return Enum(enum_name, {list_entry.entry.id: list_entry.entry for list_entry in db_enum.entries})
+    result_enum = Enum(enum_name, {list_entry.entry.id: list_entry.entry for list_entry in db_enum.entries})
+    result_enum.__sqlalchemy_object__ = String
+    return result_enum
 
 
 if __name__ == "__main__":

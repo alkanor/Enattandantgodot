@@ -14,7 +14,8 @@ def NAMED_DATE_METADATA(metadated_classname):
     columns = {
         "id": Column(Integer, primary_key=True),
         "name":  Column(String(STRING_SIZE)),
-        "date": Column(DateTime(timezone=True), server_default=utcnow()),
+        "created_at": Column(DateTime(timezone=True), server_default=utcnow()),
+        "modified_at": Column(DateTime(timezone=True), server_default=utcnow(), onupdate=utcnow())
     }
 
     return _META_SOMETHING(tname_prefix, columns)

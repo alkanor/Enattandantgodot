@@ -2,12 +2,12 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import Column, Integer, String, ForeignKey, delete
 from sqlalchemy.orm import relationship, reconstructor
 
-from persistent.base import Base, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
+from persistent.base import BaseCreateTableWhenEngine, BaseAndMetaChangeClassName, baseclass_for_sqlalchemy_with_subclass
 from persistent.type_system import register_type
 from persistent.base_type import STRING_SIZE
 
 
-class ALIAS_METADATA(Base):
+class ALIAS_METADATA(BaseCreateTableWhenEngine):
 
     __tablename__ = "alias"
 
@@ -90,6 +90,7 @@ def ALIAS(SQLAlchemyBaseType, alias_name, session=None):
             self.copy_aliased_attributes()
             
             super().__init__(alias_id=self.target.id if is_base_sqlalchemy_type else self.target.metadata.id)
+
 
         @reconstructor
         def init_on_load(self, *args):
