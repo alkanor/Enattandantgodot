@@ -1,4 +1,4 @@
-from .to_dict import sqlalchemy_to_dict, answerstatement_to_dict
+from .to_dict import sqlalchemy_to_dict, AnswerEnumAlias_to_dict
 import json
 
 
@@ -6,8 +6,8 @@ def sqlalchemy_to_json(sqlalch_obj, ctxt=None):
     return json.dumps(sqlalchemy_to_dict(sqlalch_obj, ctxt))
 
 
-def answerstatement_to_json(sqlalch_obj, ctxt=None):
-    return json.dumps(answerstatement_to_dict(sqlalch_obj, ctxt))
+def AnswerEnumAlias_to_json(sqlalch_obj, ctxt=None):
+    return json.dumps(AnswerEnumAlias_to_dict(sqlalch_obj, ctxt))
 
 
 
@@ -41,10 +41,9 @@ if __name__ == "__main__":
     print(sqlalchemy_to_json(u))
 
     from persistent.model.interact.answers.yes_no import YesNo
-    print(answerstatement_to_json(YesNo.YES(session)))
+    print(AnswerEnumAlias_to_json(YesNo.YES(session)))
 
-    from persistent.model.interact.answers.yes_no import YesNo
-    print(answerstatement_to_json(YesNo))
+    print(AnswerEnumAlias_to_json(YesNo))
 
     from datastream.converter.from_any.to_json import any_to_json
     x = any_to_json(u)

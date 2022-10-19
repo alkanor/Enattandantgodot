@@ -33,7 +33,7 @@ def iterative_traversal(self, basenode, max_depth=-1, bfs=True, return_origin=Fa
         if depth <= max_depth or max_depth < 0:
             if depth > 0 or return_origin:
                 yield node
-            for child, edgeval in self._Graph__per_node[node]+self._Graph__reverse_per_node[basenode]:  # trickery to access "private like" member of Graph (called from this dynamically added func)
+            for child, edgeval in self._Graph__per_node.get(node, [])+self._Graph__reverse_per_node.get(node, []):  # trickery to access "private like" member of Graph (called from this dynamically added func)
                 if child not in traversed:
                     stack.append((child, depth+1))
                     traversed.add(child)

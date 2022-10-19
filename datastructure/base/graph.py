@@ -1,5 +1,8 @@
 from .property_graph_extensions import property_extensions
+
+from threading import Lock
 import types
+
 
 """
 Base Graph object, which will be the core of many other ones
@@ -101,6 +104,9 @@ class Graph:
         self.__nodes = set()
         self.__per_node = {}
         self.__reverse_per_node = {}
+        self.__indexed_nodes = {}
+        self.__node_counter = 0
+        self.__lock = Lock()
 
         extended_properties_set = extend_properties_from_dependancies(properties)
         self.__properties = extended_properties_set
@@ -133,6 +139,14 @@ class Graph:
 
     def nodes(self):
         yield from self.__nodes
+
+    def indexed_nodes(self):
+        for node in self.__nodes:
+            if node not in self.__indexed_nodes:
+                with self.__lock:
+                    self.__indexed_nodes[node] = self.__node_counter
+                    self.__node_counter += 1
+            yield node, self.__indexed_nodes[node]
 
     def edges(self):
         for source in self.__per_node:

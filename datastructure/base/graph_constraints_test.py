@@ -1,3 +1,5 @@
+
+
 if __name__ == "__main__":
     from .graph_property import GraphProperty
     from .graph import Graph, Edge
@@ -75,3 +77,63 @@ if __name__ == "__main__":
     print("\nadding node")
     g.add_node(1298)
     print(weakly_connected_constraint(g))
+
+
+    def generate_graph(node_min, node_max, edge_per_node_min, edge_per_node_max):
+        import random
+        g = Graph(int, str, (GraphProperty.Directed,))
+        n_nodes = random.randint(node_min, node_max)
+        nodes = [g.add_node(x) for x in range(n_nodes)]
+        edges = []
+        for n in nodes:
+            n_edges = random.randint(edge_per_node_min, edge_per_node_max)
+            edges.extend([g.add_link(n, nodes[random.randint(0, len(nodes)-1)], f"link[{n.nodeval}-{i}]") for i in range(n_edges)])
+        return g
+
+
+
+    from persistent.model.interact.answers.yes_no_unknown import YesNoUnknown
+
+    from persistent_to_disk import create_session
+    from persistent.base_type import BasicEntity, STRING_SIZE
+
+    from sqlalchemy import String, Integer, Column, Text
+
+
+    columns = {
+        "id": Column(Integer, primary_key=True),
+        "question": Column(String(STRING_SIZE), unique=True),
+    }
+
+    Question = BasicEntity("GraphPropertyQuestion", columns)
+
+    columns = {
+        "id": Column(Integer, primary_key=True),
+        "graph_json": Column(Text, unique=True),
+    }
+
+    QuestionedObject = BasicEntity("GraphJson", columns)
+
+    from interact.server.web.json.flask.simple_flask_web_query_controller import SimpleFlaskWebQueryServer
+    from datastream.converter.from_any.to_json import any_to_json
+    from persistent.model.interact.query import QUERY
+
+    session = create_session()
+
+    randomG = generate_graph(2, 20, 0, 20)
+    graphviz_to_fs(graph_to_graphviz(randomG), 'doctest-output/output_random')
+    print(randomG)
+
+    questions = []
+    for checkfunc, cname in T[GraphProperty.Directed]:
+        questions.append(Question.GET_CREATE(session, question=f"Is constraint {cname} verified? (evaluated to {checkfunc(randomG)})"))
+
+    qobj = QuestionedObject.GET_CREATE(session, graph_json=any_to_json(randomG))
+
+    QUERY_TYPE = QUERY(QuestionedObject, Question)
+    for q in questions:
+        new_query = QUERY_TYPE.GET_CREATE(session, questioned_object=qobj, question=q)
+        print(new_query)
+
+    controller = SimpleFlaskWebQueryServer(QuestionedObject, Question, YesNoUnknown, 1, create_session)
+    controller.run()

@@ -17,7 +17,7 @@ from persistent.utils.utcnow_compile import utcnow
 @register_type(__objectname__, lambda basetype, context=None: (basetype.__tablename__, ) if not context else (basetype.__tablename__, context.__tablename__,))
 def ContextualizedType(SQLAlchemyBaseType, ContextType=None):
     if ContextType:
-        object_tablename = f"{__objectname__}<{SQLAlchemyBaseType.__tablename__}, {ContextType.__tablename__}>"
+        object_tablename = f"{__objectname__}<{SQLAlchemyBaseType.__tablename__},{ContextType.__tablename__}>"
     else:
         object_tablename = f"{__objectname__}<{SQLAlchemyBaseType.__tablename__}>"
 

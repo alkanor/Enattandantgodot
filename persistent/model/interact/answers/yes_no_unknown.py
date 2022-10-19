@@ -1,9 +1,19 @@
-from .answer_statement import craft_answer_for_session, Statement
-from enum import Enum
+from .answer_statement import craft_answer_for_session, AnswerStatement
 
 
-class YesNoUnknown(Statement, Enum):
+class YesNoUnknown(AnswerStatement):
 
-    YES = craft_answer_for_session("YES")
-    NO = craft_answer_for_session("NO")
-    UNKNOWN = craft_answer_for_session("UNKNOWN")
+    @classmethod
+    @craft_answer_for_session
+    def YES(cls):
+        pass
+
+    @classmethod
+    @craft_answer_for_session
+    def NO(cls):
+        pass
+
+    @classmethod
+    @craft_answer_for_session
+    def UNKNOWN(cls):
+        pass

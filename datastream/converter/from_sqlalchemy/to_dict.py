@@ -1,3 +1,4 @@
+from ..from_type.to_string import type_to_string
 
 
 def sqlalchemy_to_dict(sqlalch_obj, ctxt=None):
@@ -7,7 +8,10 @@ def sqlalchemy_to_dict(sqlalch_obj, ctxt=None):
         cols_dict = [{"name": c.name, "type": repr(type(c.type)), "fk": [f.target_fullname for f in c.foreign_keys]} if c.foreign_keys else \
                      {"name": c.name, "type": repr(type(c.type))} for c in columns]
         rels_dict = [{"name": r.key, "tablename": r.target.name} for r in relationships]
-        return {"columns": cols_dict, "relations": rels_dict, "type": sqlalch_obj.__tablename__}
+        res = {"columns": cols_dict, "relations": rels_dict, "tablename": sqlalch_obj.__tablename__}
+        if not ctxt or (not "notype" in ctxt) or not ctxt["notype"]:
+            res.update({"type": type_to_string(sqlalch_obj.__mapper__.class_)})
+        return res
     else:                          # we have the instanced object, returns it serialized
         max_depth = 0              # nesting depth: 0 = no nested object, 1 = 1 nested object at most, ..., -1 = infinite nesting (no circular dependancy check atm)
         if ctxt is not None and "depth" in ctxt:
@@ -16,7 +20,10 @@ def sqlalchemy_to_dict(sqlalch_obj, ctxt=None):
             next_dict["depth"] = max_depth - 1
 
         to_dict = {c.name: getattr(sqlalch_obj, c.name) for c in columns}
-        to_dict.update({"type": sqlalch_obj.__tablename__})
+        if not ctxt or (not "notype" in ctxt) or not ctxt["notype"]:
+            to_dict.update({"tablename": sqlalch_obj.__tablename__})
+            to_dict.update({"type": type_to_string(sqlalch_obj.__mapper__.class_)})
+
         if not max_depth:
             return to_dict
         for r in relationships:
@@ -27,10 +34,13 @@ def sqlalchemy_to_dict(sqlalch_obj, ctxt=None):
 
 
 def answerstatement_to_dict(sqlalch_obj, ctxt=None):
-    from enum import EnumMeta
-    if isinstance(sqlalch_obj, EnumMeta): # we have the base Enum type, returns the description
-        out_dict = {"choices": [entry for entry in sqlalch_obj.__dict__ if entry[0] != '_']}
-        out_dict.update({"type": sqlalch_obj.__class__.__name__})
+    if isinstance(sqlalch_obj, type): # we have the base type, returns the description
+        if hasattr(sqlalch_obj, "__baseattrs__"):
+            out_dict = {"choices": [entry for entry in sqlalch_obj.__dict__ if entry not in sqlalch_obj.__baseattrs__ and entry[0] != '_']}
+        else:
+            out_dict = {"choices": [entry for entry in sqlalch_obj.__dict__ if entry[0] != '_']}
+        if not ctxt or (not "notype" in ctxt) or not ctxt["notype"]:
+            out_dict.update({"type": type_to_string(sqlalch_obj)})
         if ctxt and isinstance(ctxt, dict):
             if "exclusive" in ctxt:
                 out_dict.update({"exclusive": True})

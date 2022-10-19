@@ -1,8 +1,14 @@
-from .answer_statement import craft_answer_for_session, Statement
-from enum import Enum
+from .answer_statement import craft_answer_for_session, AnswerStatement
 
 
-class YesNo(Statement, Enum):
+class YesNo(AnswerStatement):
 
-    YES = craft_answer_for_session("YES")
-    NO = craft_answer_for_session("NO")
+    @classmethod
+    @craft_answer_for_session
+    def YES(cls):
+        pass
+
+    @classmethod
+    @craft_answer_for_session
+    def NO(cls):
+        pass
