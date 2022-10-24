@@ -20,6 +20,14 @@ class SimpleFlaskWebQueryServer:
         def health():
             return "OK"
 
+        @self.app.route("/next_grouped")
+        def next_queries_grouped():
+            latest_queries, session = self.controller.get_grouped(self.queries_per_next)
+            res = jsonify([{"question": any_to_dict(q.question), "object": any_to_dict(q.questioned_object), "query": q.id, "answer": self.answer_enum}
+                              for q in latest_queries])
+            session.close()
+            return res
+
         @self.app.route("/next")
         def next_queries():
             latest_queries, session = self.controller.get(self.queries_per_next)

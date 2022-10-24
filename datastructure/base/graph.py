@@ -413,6 +413,31 @@ class Graph:
         self.__nodes.difference_update(node)
 
 
+    def merge(self, graph_or_node_edge_generator):
+        if isinstance(graph_or_node_edge_generator, Graph):
+            graph_or_node_edge_generator = graph_or_node_edge_generator.iterate()
+
+        nodes_and_edges = [(x if isinstance(x, Node) else None, x if isinstance(x, Edge) else None) for x in graph_or_node_edge_generator]
+
+        nodes_to_merge = [n for n, _ in nodes_and_edges if n]
+        [self.check_target(n.nodeval) for n in nodes_to_merge]
+        indexed_nodes_to_merge = {n: nodes_to_merge.index(n) for n in nodes_to_merge}
+        nodes = [Node(n.nodeval if self.__nodetype else None) for n in nodes_to_merge]
+
+        edges_to_merge = [e for _, e in nodes_and_edges if e]
+        [self.check_target(e.edgeval) for e in edges_to_merge]
+        edges = [Edge(nodes[indexed_nodes_to_merge[e.source]], nodes[indexed_nodes_to_merge[e.target]], e.edgeval) for e in edges_to_merge]
+
+        self.check_constraints(Graph.merge.__name__, nodes+edges)
+
+        self.__nodes.update(nodes)
+        for edge in edges:
+            source, target, edgeval = edge.source, edge.target, edge.edgeval
+            self.__per_node.setdefault(source, []).append((target, edgeval))
+            self.__reverse_per_node.setdefault(target, []).append((source, edgeval))
+        return edges
+
+
 
     def iterate(self):
         yield self.__nodetype

@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     columns = {
         "id": Column(Integer, primary_key=True),
-        "graph_json": Column(Text, unique=True),
+        "graph_json_as_string": Column(Text, unique=True),
     }
 
     QuestionedObject = BasicEntity("GraphJson", columns)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     session = create_session()
 
-    randomG = generate_graph(2, 20, 0, 20)
+    randomG = generate_graph(2, 20, 0, 3)
     graphviz_to_fs(graph_to_graphviz(randomG), 'doctest-output/output_random')
     print(randomG)
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     for checkfunc, cname in T[GraphProperty.Directed]:
         questions.append(Question.GET_CREATE(session, question=f"Is constraint {cname} verified? (evaluated to {checkfunc(randomG)})"))
 
-    qobj = QuestionedObject.GET_CREATE(session, graph_json=any_to_json(randomG))
+    qobj = QuestionedObject.GET_CREATE(session, graph_json_as_string=any_to_json(randomG))
 
     QUERY_TYPE = QUERY(QuestionedObject, Question)
     for q in questions:

@@ -56,7 +56,7 @@ if __name__ == "__main__":
     from persistent.base_type import _Integer, STRING_SIZE
 
     from sqlalchemy.exc import IntegrityError
-    from sqlalchemy import String, Integer
+    from sqlalchemy import String
 
 
     columns = {

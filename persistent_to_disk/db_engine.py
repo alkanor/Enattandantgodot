@@ -5,7 +5,7 @@ from sqlalchemy import create_engine as _create_engine
 
 
 #db_path = resolve("db_path")
-db_path = 'output.db'
+db_path = '/tmp/output.db'
 debug = True
 
 db_engine = None

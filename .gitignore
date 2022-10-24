@@ -5,3 +5,4 @@ venv
 venv2
 __pycache__
 doctest-output
+node_modules
