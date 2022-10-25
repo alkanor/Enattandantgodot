@@ -214,16 +214,16 @@ class SimpleQueryController:
 
         return result, session
 
+
     def get(self, n=1):
         def query1(session, N):
             return self.all_unanswered_queries(session).limit(N)
         def parsing1(session, results, results_all):
             return results_all
         def query2(session, N, remaining):
-            final_end, final_cols = self.sorted_unanswered_queries_per_processing_date(session,
-                                                                                       self.answered_queries(session))
-            final_end = final_end.order_by(final_cols.modified_at,
-                                           final_cols.created_at)
+            sorted_unanswered_queries, cols = self.sorted_unanswered_queries_per_processing_date(session, self.answered_queries(session))
+            final_end = sorted_unanswered_queries.order_by(cols.modified_at,
+                                                           cols.created_at)
 
             if N < 0:
                 kept_objects = final_end.subquery()
@@ -240,6 +240,69 @@ class SimpleQueryController:
             return [x[1] for x in results_all]
 
         return self.__get_internal(query1, parsing1, query2, parsing2, parsing3, n)
+
+
+    def get_querylist(self, n=1, list_metadata_condition=None):
+        def query1(session, N):
+            associated_queries = self.processing_or_answered_queries(session)
+
+            allowed_entries = session.query(self.GROUP_QUERY_TYPE.__entrytype__.id) \
+                                        .join(self.QUERY_TYPE) \
+                                        .filter(self.QUERY_TYPE.id.not_in(associated_queries))
+
+            if list_metadata_condition:
+                allowed_entries = allowed_entries.filter(list_metadata_condition)
+            allowed_entries = allowed_entries.group_by(self.GROUP_QUERY_TYPE.__entrytype__.id)
+
+            if N > 0:
+                allowed_entries = allowed_entries.limit(N)
+
+            return session.query(self.QUERY_TYPE) \
+                            .join(self.GROUP_QUERY_TYPE.__entrytype__) \
+                            .filter(self.GROUP_QUERY_TYPE.__entrytype__.id.in_(allowed_entries))
+        def parsing1(session, results, results_all):
+            return results_all
+        def query2(session, N, remaining):
+            sorted_unanswered_queries, cols = self.sorted_unanswered_queries_per_processing_date(session,
+                                                                                                 self.answered_queries(session))
+            print("\n".join(map(repr, sorted_unanswered_queries.all())))
+
+            sorted_unanswered_subquery = sorted_unanswered_queries.subquery()
+
+            sorted_entries = session.query(GroupedQueries.__entrytype__.metadata_id, sorted_unanswered_subquery.c.modified_at,
+                                   sorted_unanswered_subquery.c.created_at, sorted_unanswered_subquery.c.cp_id,
+                                   func.rank().over(
+                                       order_by=(sorted_unanswered_subquery.c.modified_at,
+                                                 sorted_unanswered_subquery.c.created_at),
+                                       partition_by=GroupedQueries.__entrytype__.metadata_id
+                                   ).label('rnk')
+                                   ) \
+                .join(sorted_unanswered_subquery).subquery()
+
+            latest_sorted_entries = session.query(sorted_entries) \
+                .filter(sorted_entries.c.rnk == 1) \
+                .order_by(sorted_entries.c.modified_at, sorted_entries.c.created_at)
+
+            if N < 0:
+                latest_sorted_entries_subquery = latest_sorted_entries.subquery()
+            else:
+                latest_sorted_entries_subquery = latest_sorted_entries.limit(remaining).subquery()
+
+            print("\n".join(map(repr, latest_sorted_entries.all())))
+
+            return session.query(QUERY_TYPE, latest_sorted_entries_subquery.c.cp_id) \
+                .join(GroupedQueries.__entrytype__) \
+                .join(latest_sorted_entries_subquery, latest_sorted_entries_subquery.c.metadata_id == GroupedQueries.__entrytype__.metadata_id) \
+                .options(joinedload(self.QUERY_TYPE.questioned_object)) \
+                .options(joinedload(self.QUERY_TYPE.question)) \
+                .order_by(latest_sorted_entries_subquery.c.modified_at, latest_sorted_entries_subquery.c.created_at)
+        def parsing2(session, results, results_all):
+            return [x[0] for x in results_all]
+        def parsing3(session, results, results_all):
+            return [x[1] for x in results_all]
+
+        return self.__get_internal(query1, parsing1, query2, parsing2, parsing3, n)
+
 
 
     def getX(self, n=1):
@@ -434,6 +497,8 @@ if __name__ == "__main__":
     s = SimpleQueryController(QuestionedObject, Question, ANSWER_TYPE, None, None, None, create_session)
     s.resolve(session)
 
+    print(s.get_querylist())
+    exit()
 
     sorted_queries, cols = s.sorted_unanswered_queries_per_processing_date(session,
                                                                            s.answered_queries(session))
