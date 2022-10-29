@@ -9,7 +9,7 @@ def create_session():
         from .db_engine import db_engine
         assert(db_engine)
     
-    return sessionmaker(bind=db_engine)()
+    return sessionmaker(bind=db_engine, expire_on_commit=False)()
 
 
 if __name__ == "__main__":
