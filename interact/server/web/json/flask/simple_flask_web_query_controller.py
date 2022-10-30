@@ -1,3 +1,5 @@
+import itertools
+
 from datastream.controller.query_controller.simple_query_controller import register_query_controller, SimpleQueryController
 from datastream.converter.from_any.to_dict import any_to_dict
 from datastream.converter.from_dict.to_any import dict_to_any
@@ -20,21 +22,26 @@ class SimpleFlaskWebQueryServer:
         def health():
             return "OK"
 
-        @self.app.route("/next_grouped")
-        def next_queries_grouped():
-            latest_queries, session = self.controller.get_grouped(self.queries_per_next)
-            res = jsonify([{"question": any_to_dict(q.question), "object": any_to_dict(q.questioned_object), "query": q.id, "answer": self.answer_enum}
-                              for q in latest_queries])
+        def __internal_get(latest_queries, session, existing_answers=None):
+            res_dict = SimpleFlaskWebQueryServer.craft_final_dict(latest_queries)
+            res_dict.update({"answer": self.answer_enum})
+            if existing_answers:
+                res_dict.update({"existing_answers": {i: {"id": j, "ans": any_to_dict(x)} for i,j,x in existing_answers}})
+            res = jsonify(res_dict)
             session.close()
             return res
 
         @self.app.route("/next")
         def next_queries():
-            latest_queries, session = self.controller.get(self.queries_per_next)
-            res = jsonify([{"question": any_to_dict(q.question), "object": any_to_dict(q.questioned_object), "query": q.id, "answer": self.answer_enum}
-                              for q in latest_queries])
-            session.close()
-            return res
+            return __internal_get(*self.controller.get(self.queries_per_next))
+
+        @self.app.route("/next_grouped")
+        def next_queries_stacked():
+            return __internal_get(*self.controller.get_querylist(self.queries_per_next))
+
+        @self.app.route("/next_forobject")
+        def next_queries_grouped_for_objects():
+            return __internal_get(*self.controller.get_objectgroup(self.queries_per_next))
 
         @self.app.route("/processed", methods=["POST"])
         def process_query():
@@ -47,6 +54,29 @@ class SimpleFlaskWebQueryServer:
             session.close()
             return res
 
+    @staticmethod
+    def recursive_dict_crafting(sorted_data, cur_depth, max_depth):
+        if cur_depth >= max_depth:
+            return [x[0].id for x in sorted_data]
+        res_dict = {}
+        for i, l in itertools.groupby(sorted_data, lambda x: x[cur_depth]):
+            res_dict[i] = SimpleFlaskWebQueryServer.recursive_dict_crafting(l, cur_depth+1, max_depth)
+        return res_dict
+
+    @staticmethod
+    def craft_final_dict(queries_with_metadata):
+        objs = {q[0].questionedobject_id: q[0].questioned_object for q in queries_with_metadata}
+        questions = {q[0].question_id: q[0].question for q in queries_with_metadata}
+        queries = {q[0].id: (q[0].id, q[0].questionedobject_id, q[0].question_id) for q in queries_with_metadata}
+
+        sorted_data = sorted(queries_with_metadata, key=lambda t: t[1:])
+        ordered_queries = SimpleFlaskWebQueryServer.recursive_dict_crafting(sorted_data, 1, len(sorted_data[0]))
+        return {
+            "objs": any_to_dict(objs.values()),
+            "questions": any_to_dict(questions.values()),
+            "queries": any_to_dict(queries.values()),
+            "ordered_queries": any_to_dict(ordered_queries),
+        }
 
     def set_db_session(self, db_session):
         self.controller.set_db_session(db_session)

@@ -10,8 +10,6 @@ from persistent.base_type import _String
 
 from sqlalchemy import update, or_, func
 
-import itertools
-
 
 controllers_per_canal = {}
 
@@ -50,7 +48,6 @@ class SimpleQueryController:
             self.CONTEXTUALIZED_PROCESSING_TYPE = ContextualizedType(self.PROCESSING_TYPE, _String)
             session.close()
         else:
-            self.db_session = None
             self.STATUS_TYPE = None
             self.PROCESSING_TYPE = None
             self.METADATED_PROCESSING_TYPE = None
@@ -109,12 +106,11 @@ class SimpleQueryController:
                     ) \
                     .subquery()
 
-            return (session.query(sorted_unanswered_queries_per_processing_date.c.id,
+            return session.query(sorted_unanswered_queries_per_processing_date.c.id,
                                  sorted_unanswered_queries_per_processing_date.c.cp_id,
                                  sorted_unanswered_queries_per_processing_date.c.modified_at,
                                  sorted_unanswered_queries_per_processing_date.c.created_at) \
-                          .filter(sorted_unanswered_queries_per_processing_date.c.rnk == 1),
-                    sorted_unanswered_queries_per_processing_date.c)
+                          .filter(sorted_unanswered_queries_per_processing_date.c.rnk == 1)
 
         self.sorted_unanswered_queries_per_processing_date = sorted_unanswered_queries_per_processing_date_func
 
@@ -125,37 +121,56 @@ class SimpleQueryController:
 
 
 
-    def get_group(self, n=1):
-        self.GROUP_OBJECT_TYPE = LIST(questioned_object_type)
-
     # first_query must return an SQLAlchemy query that is made of any SQLAlchemy objects of type X
     # first_parsing is a conversion function (first_query -> [X]) -> QUERY_TYPE
     # second_query must return an SQLAlchemy query that is made of any SQLAlchemy objects of type Y
     # second_parsing is a conversion function (second_query -> [Y]) -> [Z]
     # third_parsing is a conversion function (second_query -> [Y]) -> CTXT_PROCESSING[id] (for updating appropriate processings)
-    def __get_internal(self, first_query, first_parsing, second_query, second_parsing, third_parsing, n=1, length_func=len):
+    def __get_internal(self, first_query, first_parsing, second_parsing, second_query, third_parsing, fourth_parsing, n=1, length_func=len):
         if n == 0:
             return [], None
 
         session = self.db_session_creator()
         self.resolve(session)
+
         remaining_to_get = 0
         result = []
+        answers = []
 
         if n > 0:
             first_batch_query_full, first_batch_query_toupdate = first_query(session, n)
             first_batch = first_batch_query_full.all()
             result.extend(second_parsing(session, first_batch, first_batch))
 
-            queries_to_update = first_parsing(session, first_batch_query_toupdate, first_batch_query_toupdate.all())
-            queries_per_id = {q.id: q for q in queries_to_update}
+            answers.extend(session.query(self.ANSWER_TYPE.query_id, self.ANSWER_TYPE.id, self.ANSWER_TYPE.__answertype__) \
+                .join(self.ANSWER_TYPE.__answertype__) \
+                .join(first_batch_query_full.subquery()) \
+                .join(self.CONTEXTUALIZED_ANSWER_TYPE) \
+                .filter(self.CONTEXTUALIZED_ANSWER_TYPE.context == self.target_name_answer) \
+                .all())
+
+            queries_to_create = first_parsing(session, first_batch_query_toupdate, first_batch_query_toupdate.all())
+            queries_to_create_per_id = {q.id: q for q in queries_to_create}
+            all_queries_to_update = first_parsing(session, first_batch_query_full, first_batch)
+            queries_to_update_per_id = {q.id: q for q in all_queries_to_update if q.id not in queries_to_create_per_id}
+
             processings = [
-                self.PROCESSING_TYPE.GET_CREATE(session, query=q, status=self.start) for q in queries_per_id.values()
+                self.PROCESSING_TYPE.GET_CREATE(session, query=q, status=self.start) for q in queries_to_create_per_id.values()
             ]
             contextualized_processings = [
                 self.CONTEXTUALIZED_PROCESSING_TYPE(context=self.target_name_processing, obj=p) for p in processings
             ]
             [session.add(cp) for cp in contextualized_processings]
+
+            remaining_cprocessing = \
+                session.query(self.CONTEXTUALIZED_PROCESSING_TYPE.id) \
+                    .join(self.PROCESSING_TYPE) \
+                    .join(self.QUERY_TYPE) \
+                    .filter(self.QUERY_TYPE.id.in_(list(queries_to_update_per_id.keys()))) \
+                    .filter(self.CONTEXTUALIZED_PROCESSING_TYPE.context == self.target_name_processing)
+
+            for processing_id in remaining_cprocessing:
+                session.execute(update(self.CONTEXTUALIZED_PROCESSING_TYPE).where(self.CONTEXTUALIZED_PROCESSING_TYPE.id == processing_id[0]))
             session.commit()
 
             remaining_to_get = n - length_func(result)
@@ -163,14 +178,21 @@ class SimpleQueryController:
         if n < 0 or remaining_to_get > 0:
             second_batch_query = second_query(session, n, remaining_to_get)
             second_batch = second_batch_query.all()
-            result.extend(second_parsing(session, second_batch_query, second_batch))
+            result.extend(third_parsing(session, second_batch_query, second_batch))
 
-            ctprocessingindex = third_parsing(session, second_batch_query, second_batch)
+            answers.extend(session.query(self.ANSWER_TYPE.query_id, self.ANSWER_TYPE.id, self.ANSWER_TYPE.__answertype__) \
+                .join(self.ANSWER_TYPE.__answertype__) \
+                .join(second_batch_query.subquery()) \
+                .join(self.CONTEXTUALIZED_ANSWER_TYPE) \
+                .filter(self.CONTEXTUALIZED_ANSWER_TYPE.context == self.target_name_answer) \
+                .all())
+
+            ctprocessingindex = fourth_parsing(session, second_batch_query, second_batch)
             for processing_id in ctprocessingindex:
                 session.execute(update(self.CONTEXTUALIZED_PROCESSING_TYPE).where(self.CONTEXTUALIZED_PROCESSING_TYPE.id == processing_id))
             session.commit()
 
-        return result, session
+        return result, session, answers
 
 
     def get(self, n=1):
@@ -179,26 +201,31 @@ class SimpleQueryController:
             return result, result
         def parsing1(session, results, results_all):
             return results_all
+        def parsing2(session, results, results_all):
+            return [(x, x.questionedobject_id) for x in results_all]
+        def parsing_to_answers(session, results, results_all): # no answer existing for the get method to return something
+            return []
         def query2(session, N, remaining):
-            sorted_unanswered_queries, cols = self.sorted_unanswered_queries_per_processing_date(session, self.answered_queries(session))
-            final_end = sorted_unanswered_queries.order_by(cols.modified_at,
-                                                           cols.created_at)
+            sorted_unanswered_queries = self.sorted_unanswered_queries_per_processing_date(session, self.answered_queries(session)).subquery()
+            ordered_queries = session.query(sorted_unanswered_queries) \
+                                        .order_by(sorted_unanswered_queries.c.modified_at,
+                                                  sorted_unanswered_queries.c.created_at)
 
             if N < 0:
-                kept_objects = final_end.subquery()
+                kept_objects = ordered_queries.subquery()
             else:
-                kept_objects = final_end.limit(remaining).subquery()
+                kept_objects = ordered_queries.limit(remaining).subquery()
 
             return session.query(self.QUERY_TYPE, kept_objects.c.cp_id) \
                 .join(kept_objects, kept_objects.c.id == self.QUERY_TYPE.id) \
                 .options(joinedload(self.QUERY_TYPE.questioned_object)) \
                 .options(joinedload(self.QUERY_TYPE.question))
-        def parsing2(session, results, results_all):
-            return [(x[0],) for x in results_all]
         def parsing3(session, results, results_all):
+            return [(x[0], x[0].questionedobject_id) for x in results_all]
+        def parsing4(session, results, results_all):
             return [x[1] for x in results_all]
 
-        return self.__get_internal(query1, parsing1, query2, parsing2, parsing3, n)
+        return self.__get_internal(query1, parsing1, parsing2, query2, parsing3, parsing4, n)
 
 
     def __queries_that_are_not_in_group(self, N, session, group_query_type, join_obj=False, list_metadata_condition=None):
@@ -217,16 +244,47 @@ class SimpleQueryController:
         if N > 0:
             allowed_entries = allowed_entries.limit(N)
 
-        res = session.query(self.QUERY_TYPE, group_query_type.__entrytype__.metadata_id)
+        res = session.query(self.QUERY_TYPE, group_query_type.__entrytype__.metadata_id) \
+                        .options(joinedload(self.QUERY_TYPE.questioned_object))
         if join_obj:
-            res = res.options(joinedload(self.QUERY_TYPE.questioned_object)) \
-                     .join(group_query_type.__entrytype__, group_query_type.__entrytype__.entry_id == self.QUERY_TYPE.questionedobject_id)
+            res = res.join(group_query_type.__entrytype__, group_query_type.__entrytype__.entry_id == self.QUERY_TYPE.questionedobject_id)
         else:
             res = res.join(group_query_type.__entrytype__)
         res = res.options(joinedload(self.QUERY_TYPE.question)) \
                     .filter(group_query_type.__entrytype__.metadata_id.in_(allowed_entries))
-        print(res.all())
         return res, res.filter(self.QUERY_TYPE.id.not_in(associated_queries))
+
+
+    def __queries_sorted_by_contextualized_processing(self, session, q1, q2, remaining):
+        sorted_unanswered_queries = self.sorted_unanswered_queries_per_processing_date(session,
+                                                                                             self.answered_queries(session))
+        #print("\n".join(map(repr, sorted_unanswered_queries.all())))
+        sorted_unanswered_subquery = sorted_unanswered_queries.subquery()
+
+        sorted_entries = q1(sorted_unanswered_subquery)
+        latest_sorted_entries = session.query(sorted_entries) \
+            .filter(sorted_entries.c.rnk == 1) \
+            .order_by(sorted_entries.c.modified_at, sorted_entries.c.created_at) \
+            .group_by(sorted_entries.c.metadata_id)
+
+        if remaining < 0:
+            latest_sorted_entries_subquery = latest_sorted_entries.subquery()
+        else:
+            latest_sorted_entries_subquery = latest_sorted_entries.limit(remaining).subquery()
+
+        return q2(latest_sorted_entries_subquery)
+
+
+    def __contextualized_processing_id_from_queryids(self, session, results):
+        result_subquery = results.subquery()
+        return session.query(self.CONTEXTUALIZED_PROCESSING_TYPE.id) \
+                        .join(self.PROCESSING_TYPE) \
+                        .join(self.QUERY_TYPE) \
+                        .join(result_subquery, result_subquery.c.id == self.PROCESSING_TYPE.query_id) \
+                        .filter(self.CONTEXTUALIZED_PROCESSING_TYPE.context == self.target_name_processing) \
+                        .group_by(self.CONTEXTUALIZED_PROCESSING_TYPE.id)
+                        # todo : sort and take only the most recent
+                        # .order_by(self.CONTEXTUALIZED_PROCESSING_TYPE.modified_at, self.CONTEXTUALIZED_PROCESSING_TYPE.created_at) \
 
 
     def get_querylist(self, n=1, list_metadata_condition=None):
@@ -235,13 +293,8 @@ class SimpleQueryController:
         def parsing1(session, results, results_all):
             return [x[0] for x in results_all]
         def query2(session, N, remaining):
-            sorted_unanswered_queries, cols = self.sorted_unanswered_queries_per_processing_date(session,
-                                                                                                 self.answered_queries(session))
-            print("\n".join(map(repr, sorted_unanswered_queries.all())))
-
-            sorted_unanswered_subquery = sorted_unanswered_queries.subquery()
-
-            sorted_entries = session.query(self.GROUP_QUERY_TYPE.__entrytype__.metadata_id, sorted_unanswered_subquery.c.modified_at,
+            sorted_entries = lambda sorted_unanswered_subquery:\
+                                session.query(self.GROUP_QUERY_TYPE.__entrytype__.metadata_id, sorted_unanswered_subquery.c.modified_at,
                                        sorted_unanswered_subquery.c.created_at, sorted_unanswered_subquery.c.cp_id,
                                        func.rank().over(
                                            order_by=(sorted_unanswered_subquery.c.modified_at,
@@ -250,40 +303,23 @@ class SimpleQueryController:
                                            partition_by=self.GROUP_QUERY_TYPE.__entrytype__.metadata_id
                                        ).label('rnk')
                                    ) \
-                            .join(sorted_unanswered_subquery).subquery()
+                                .join(sorted_unanswered_subquery).subquery()
 
-            latest_sorted_entries = session.query(sorted_entries) \
-                .filter(sorted_entries.c.rnk == 1) \
-                .order_by(sorted_entries.c.modified_at, sorted_entries.c.created_at) \
-                .group_by(sorted_entries.c.metadata_id)
-
-            if N < 0:
-                latest_sorted_entries_subquery = latest_sorted_entries.subquery()
-            else:
-                latest_sorted_entries_subquery = latest_sorted_entries.limit(remaining).subquery()
-
-            return session.query(self.QUERY_TYPE, self.GROUP_QUERY_TYPE.__entrytype__.metadata_id) \
-                            .join(self.GROUP_QUERY_TYPE.__entrytype__) \
-                            .join(latest_sorted_entries_subquery, latest_sorted_entries_subquery.c.metadata_id == self.GROUP_QUERY_TYPE.__entrytype__.metadata_id) \
-                            .options(joinedload(self.QUERY_TYPE.questioned_object)) \
-                            .options(joinedload(self.QUERY_TYPE.question)) \
-                            .order_by(latest_sorted_entries_subquery.c.modified_at, latest_sorted_entries_subquery.c.created_at)
-        def parsing2(session, results, results_all):
-            return [(x._BasicEntity, x.metadata_id, x._BasicEntity.questionedobject_id) for x in results_all]
+            queries_req = lambda latest_sorted_entries_subquery:\
+                            session.query(self.QUERY_TYPE, self.GROUP_QUERY_TYPE.__entrytype__.metadata_id) \
+                                .join(self.GROUP_QUERY_TYPE.__entrytype__) \
+                                .join(latest_sorted_entries_subquery, latest_sorted_entries_subquery.c.metadata_id == self.GROUP_QUERY_TYPE.__entrytype__.metadata_id) \
+                                .options(joinedload(self.QUERY_TYPE.questioned_object)) \
+                                .options(joinedload(self.QUERY_TYPE.question)) \
+                                .order_by(latest_sorted_entries_subquery.c.modified_at, latest_sorted_entries_subquery.c.created_at)
+            return self.__queries_sorted_by_contextualized_processing(session, sorted_entries, queries_req, remaining if N > 0 else -1)
         def parsing3(session, results, results_all):
-            result_subquery = results.subquery()
-            latest_processings = session.query(self.CONTEXTUALIZED_PROCESSING_TYPE.id) \
-                                        .join(self.PROCESSING_TYPE) \
-                                        .join(self.QUERY_TYPE) \
-                                        .join(result_subquery, result_subquery.c.id == self.PROCESSING_TYPE.query_id) \
-                                        .filter(self.CONTEXTUALIZED_PROCESSING_TYPE.context == self.target_name_processing) \
-                                        .group_by(self.CONTEXTUALIZED_PROCESSING_TYPE.id)
-                                        # todo : sort and take only the most recent
-                                        # .order_by(self.CONTEXTUALIZED_PROCESSING_TYPE.modified_at, self.CONTEXTUALIZED_PROCESSING_TYPE.created_at) \
-            return [x[0] for x in latest_processings.all()]
+            return [(x._BasicEntity, x.metadata_id, x._BasicEntity.questionedobject_id) for x in results_all]
+        def parsing4(session, results, results_all):
+            return [x[0] for x in self.__contextualized_processing_id_from_queryids(session, results)]
         def count_different_metadata(results):
-            return len(set([x[-1] for x in results]))
-        return self.__get_internal(query1, parsing1, query2, parsing2, parsing3, n, count_different_metadata)
+            return len(set([x[1] for x in results]))
+        return self.__get_internal(query1, parsing1, parsing3, query2, parsing3, parsing4, n, count_different_metadata)
 
 
     def get_objectgroup(self, n=1):
@@ -292,68 +328,42 @@ class SimpleQueryController:
         def parsing1(session, results, results_all):
             return [x[0] for x in results_all]
         def query2(session, N, remaining):
-            print(f"REMAINING: {remaining}")
-            sorted_unanswered_queries, cols = self.sorted_unanswered_queries_per_processing_date(session,
-                                                                                                 self.answered_queries(session))
-            print("\n".join(map(repr, sorted_unanswered_queries.all())))
+            sorted_entries = lambda sorted_unanswered_subquery: \
+                session.query(self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id,
+                              sorted_unanswered_subquery.c.modified_at,
+                              sorted_unanswered_subquery.c.created_at, sorted_unanswered_subquery.c.cp_id,
+                              func.rank().over(
+                                  order_by=(sorted_unanswered_subquery.c.modified_at,
+                                            sorted_unanswered_subquery.c.created_at,
+                                            self.GROUP_OBJECT_TYPE.__entrytype__.id),
+                                  partition_by=self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id
+                              ).label('rnk')
+                    ) \
+                    .join(self.QUERY_TYPE.__questionobjecttype__,
+                          self.QUERY_TYPE.__questionobjecttype__.id == self.GROUP_OBJECT_TYPE.__entrytype__.entry_id) \
+                    .join(self.QUERY_TYPE,
+                          self.QUERY_TYPE.questionedobject_id == self.GROUP_OBJECT_TYPE.__entrytype__.entry_id) \
+                    .join(sorted_unanswered_subquery, sorted_unanswered_subquery.c.id == self.QUERY_TYPE.id) \
+                    .subquery()
 
-            sorted_unanswered_subquery = sorted_unanswered_queries.subquery()
-
-            sorted_entries = session.query(self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id, sorted_unanswered_subquery.c.modified_at,
-                                       sorted_unanswered_subquery.c.created_at, sorted_unanswered_subquery.c.cp_id,
-                                       func.rank().over(
-                                           order_by=(sorted_unanswered_subquery.c.modified_at,
-                                                     sorted_unanswered_subquery.c.created_at,
-                                                     self.GROUP_OBJECT_TYPE.__entrytype__.id),
-                                           partition_by=self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id
-                                       ).label('rnk')
-                                   ) \
-                            .join(self.QUERY_TYPE.__questionobjecttype__,
-                                  self.QUERY_TYPE.__questionobjecttype__.id == self.GROUP_OBJECT_TYPE.__entrytype__.entry_id) \
-                            .join(self.QUERY_TYPE,
-                                  self.QUERY_TYPE.questionedobject_id == self.GROUP_OBJECT_TYPE.__entrytype__.entry_id) \
-                            .join(sorted_unanswered_subquery, sorted_unanswered_subquery.c.id == self.QUERY_TYPE.id) \
-                            .subquery()
-
-            latest_sorted_entries = session.query(sorted_entries) \
-                .filter(sorted_entries.c.rnk == 1) \
-                .order_by(sorted_entries.c.modified_at, sorted_entries.c.created_at) \
-                .group_by(sorted_entries.c.metadata_id)
-
-            if N < 0:
-                latest_sorted_entries_subquery = latest_sorted_entries.subquery()
-            else:
-                latest_sorted_entries_subquery = latest_sorted_entries.limit(remaining).subquery()
-
-            print("\n".join(map(repr, latest_sorted_entries.all())))
-
-            return session.query(self.QUERY_TYPE, self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id) \
-                            .options(joinedload(self.QUERY_TYPE.questioned_object)) \
-                            .join(self.GROUP_OBJECT_TYPE.__entrytype__, self.GROUP_OBJECT_TYPE.__entrytype__.entry_id == self.QUERY_TYPE.questionedobject_id) \
-                            .join(latest_sorted_entries_subquery, latest_sorted_entries_subquery.c.metadata_id == self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id) \
-                            .options(joinedload(self.QUERY_TYPE.question)) \
-                            .order_by(latest_sorted_entries_subquery.c.modified_at, latest_sorted_entries_subquery.c.created_at)
-        def parsing2(session, results, results_all):
-            return [(x._BasicEntity, x.metadata_id, x._BasicEntity.questionedobject_id) for x in results_all]
+            queries_req = lambda latest_sorted_entries_subquery: \
+                session.query(self.QUERY_TYPE, self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id) \
+                    .options(joinedload(self.QUERY_TYPE.questioned_object)) \
+                    .join(self.GROUP_OBJECT_TYPE.__entrytype__,
+                          self.GROUP_OBJECT_TYPE.__entrytype__.entry_id == self.QUERY_TYPE.questionedobject_id) \
+                    .join(latest_sorted_entries_subquery,
+                          latest_sorted_entries_subquery.c.metadata_id == self.GROUP_OBJECT_TYPE.__entrytype__.metadata_id) \
+                    .options(joinedload(self.QUERY_TYPE.question)) \
+                    .order_by(latest_sorted_entries_subquery.c.modified_at, latest_sorted_entries_subquery.c.created_at)
+            return self.__queries_sorted_by_contextualized_processing(session, sorted_entries, queries_req, remaining if N > 0 else -1)
         def parsing3(session, results, results_all):
-            result_subquery = results.subquery()
-            latest_processings = session.query(self.CONTEXTUALIZED_PROCESSING_TYPE.id) \
-                                        .join(self.PROCESSING_TYPE) \
-                                        .join(self.QUERY_TYPE) \
-                                        .join(result_subquery, result_subquery.c.id == self.PROCESSING_TYPE.query_id) \
-                                        .filter(self.CONTEXTUALIZED_PROCESSING_TYPE.context == self.target_name_processing) \
-                                        .group_by(self.CONTEXTUALIZED_PROCESSING_TYPE.id)
-                                        # todo : sort and take only the most recent
-                                        # .order_by(self.CONTEXTUALIZED_PROCESSING_TYPE.modified_at, self.CONTEXTUALIZED_PROCESSING_TYPE.created_at) \
-            return [x[0] for x in latest_processings.all()]
+            return [(x._BasicEntity, x.metadata_id, x._BasicEntity.questionedobject_id) for x in results_all]
+        def parsing4(session, results, results_all):
+            return [x[0] for x in self.__contextualized_processing_id_from_queryids(session, results)]
         def count_different_metadata(results):
-            print("OKOK COUNT")
-            print(results)
-            print(len(set([x[-1] for x in results])))
-            print("========================")
-            return len(set([x[-1] for x in results]))
+            return len(set([x[1] for x in results]))
 
-        return self.__get_internal(query1, parsing1, query2, parsing2, parsing3, n, count_different_metadata)
+        return self.__get_internal(query1, parsing1, parsing3, query2, parsing3, parsing4, n, count_different_metadata)
 
 
     def answer(self, data, session=None):
@@ -483,31 +493,50 @@ if __name__ == "__main__":
         g.add(session, queries[2])
         g.add(session, queries[3])
         g2 = GroupedQueries(session, name="test gqueries 2")
-        g2.add(session, queries[0])
+        g2.add(session, queries[1])
         g2.add(session, queries[6])
         g2.add(session, queries[7])
-        g2.add(session, queries[8])
         g3 = GroupedQueries(session, name="test gqueries 3")
-        g3.add(session, queries[0])
+        g3.add(session, queries[2])
         g3.add(session, queries[10])
         g3.add(session, queries[11])
         g4 = GroupedQueries(session, name="test gqueries 4")
         g4.add(session, queries[4])
         g4.add(session, queries[9])
 
-    s = SimpleQueryController(QuestionedObject, Question, ANSWER_TYPE, None, None, None, create_session)
-    s.resolve(session)
+    session.close()
 
-    tmp, session2 = s.get_querylist(1)
-    for i in tmp:
-        print(i)
-    session2.close()
+    s = SimpleQueryController(QuestionedObject, Question, YesNoUnknown, None, None, None, create_session)
+    #s.resolve(session)
 
     import time
-    time.sleep(1)
 
-    tmp, session3 = s.get_objectgroup(1)
-    print(tmp)
+    tmp2, session3, ans2 = s.get_objectgroup(1)
+    session3.close()
+    time.sleep(1)
+    tmp, session2, ans1 = s.get_querylist(1)
+    session2.close()
+    time.sleep(1)
+    tmp3, session4, ans3 = s.get(2)
+    session4.close()
+
+    print("="*1000)
+    for i in tmp:
+        print(i)
+
+    print("="*1000)
+    for i in tmp2:
+        print(i)
+
+    print("="*1000)
+    for i in tmp3:
+        print(i)
+
+    from interact.server.web.json.flask.simple_flask_web_query_controller import SimpleFlaskWebQueryServer
+    print(SimpleFlaskWebQueryServer.craft_final_dict(tmp))
+    print(SimpleFlaskWebQueryServer.craft_final_dict(tmp2))
+    print(SimpleFlaskWebQueryServer.craft_final_dict(tmp3))
+
     exit()
 
     sorted_queries, cols = s.sorted_unanswered_queries_per_processing_date(session,
