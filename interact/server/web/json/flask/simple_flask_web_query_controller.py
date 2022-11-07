@@ -4,6 +4,7 @@ from datastream.controller.query_controller.simple_query_controller import regis
 from datastream.converter.from_any.to_dict import any_to_dict
 from datastream.converter.from_dict.to_any import dict_to_any
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 from datastream.semantics.communication_canal.http import HTTP
 from datastream.semantics.types.json import JSON
@@ -17,6 +18,7 @@ class SimpleFlaskWebQueryServer:
         self.answer_type = answer_type
         self.queries_per_next = max(1, queries_per_next)
         self.app = Flask(__name__)
+        CORS(self.app)
 
         @self.app.route("/health")
         def health():
@@ -31,17 +33,21 @@ class SimpleFlaskWebQueryServer:
             session.close()
             return res
 
+
         @self.app.route("/next")
-        def next_queries():
-            return __internal_get(*self.controller.get(self.queries_per_next))
+        @self.app.route("/next/<N>")
+        def next_queries(N = -1):
+            return __internal_get(*self.controller.get(int(N) if int(N) > 0 else self.queries_per_next))
 
         @self.app.route("/next_grouped")
-        def next_queries_stacked():
-            return __internal_get(*self.controller.get_querylist(self.queries_per_next))
+        @self.app.route("/next_grouped/<N>")
+        def next_queries_stacked(N = -1):
+            return __internal_get(*self.controller.get_querylist(int(N) if int(N) > 0 else self.queries_per_next))
 
-        @self.app.route("/next_forobject")
-        def next_queries_grouped_for_objects():
-            return __internal_get(*self.controller.get_objectgroup(self.queries_per_next))
+        @self.app.route("/next_forobjectgroup")
+        @self.app.route("/next_forobjectgroup/<N>")
+        def next_queries_grouped_for_objects(N = -1):
+            return __internal_get(*self.controller.get_objectgroup(int(N) if int(N) > 0 else self.queries_per_next))
 
         @self.app.route("/processed", methods=["POST"])
         def process_query():
