@@ -1,18 +1,35 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
 
-// uses QueriesForOneObject
+import QuestionsForObject from './ObjectAndQuestions.js';
 
 
 export default function StackedObjectsQueries({data, item, checkStackedPerObject = true}) {
-    const [baseList, setBaseList] = React.useState(data);
+    let objectKeys = item && Object.keys(item);
 
     return (
-     <>
-      <Typography>
-        {JSON.stringify(item)}
-      </Typography>
-     </>
+     <Box
+        sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        '& > :not(style)': {
+          m: 1,
+        },
+        minHeight: 500,
+      }}
+     >
+     {item && objectKeys.map(
+        (objid) => {
+          return (
+            <Paper elevation={3} key={objid}>
+                <QuestionsForObject objectId={objid} queriesForObject={item[objid]} data={data}/>
+            </Paper>
+        );
+       })
+      }
+    </Box>
     );
 }
 

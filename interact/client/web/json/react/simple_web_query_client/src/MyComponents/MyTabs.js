@@ -7,7 +7,6 @@ import Box from '@mui/material/Box';
 import BasicPagination from './MyPagination.js';
 import QueriesForOneObject from './QueriesForOneObject.js';
 import StackedObjectsQueries from './StackedObjectsQueries.js';
-import StackedQueries from './StackedQueries.js';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
 
@@ -69,14 +68,27 @@ export default function BasicTabs({baseUrl, maxSimultaneousQuestions = 200}) {
           setMainData( mainData.map( (bdata, index) => index_query == index ?
                 {
                     choices: data.answer.choices,
-                    objs: data.objs,
+                    /*objs: data.objs,
                     queries: data.queries.map( (query) => {return {id: query[0], obj: query[1], question: query[2]}} ),
-                    ordered_queries: data.ordered_queries,
                     questions: data.questions.map( (question) => {return {id: question.id, question: question.question}} ),
-                    existing_answers: data.existing_answers && Object.keys(data.existing_answers).reduce(
+                    */
+                    objs: data.objs.reduce(
+                        function (dict, acc) {
+                            return {...dict, ...{[acc.id]: acc}};
+                        }, {}),
+                    queries: data.queries.reduce(
+                        function (dict, query) {
+                            return {...dict, ...{[query[0]]: {obj: query[1], question: query[2]}}};
+                        }, {}),
+                    ordered_queries: data.ordered_queries,
+                    questions: data.questions.reduce(
+                        function (dict, acc) {
+                            return {...dict, ...{[acc.id]: acc.question}};
+                        }, {}),
+                    existing_answers: data.existing_answers,  /*&& Object.keys(data.existing_answers).reduce(
                         function (dict, acc) {
                             return {...dict, ...{queryid: acc, ans: data.existing_answers[acc].ans}};
-                        }, {}),
+                        }, {}),*/
                 } : bdata ));
           setError('');
         },
@@ -99,7 +111,7 @@ export default function BasicTabs({baseUrl, maxSimultaneousQuestions = 200}) {
         </Tabs>
       </Box>
 
-      {[QueriesForOneObject, StackedObjectsQueries, StackedQueries].map(
+      {[QueriesForOneObject, StackedObjectsQueries, StackedObjectsQueries].map(
         (Obj, i) => {
           return (
             <TabPanel value={value} index={i} key={i}>
