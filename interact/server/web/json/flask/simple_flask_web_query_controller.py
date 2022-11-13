@@ -76,7 +76,7 @@ class SimpleFlaskWebQueryServer:
         queries = {q[0].id: (q[0].id, q[0].questionedobject_id, q[0].question_id) for q in queries_with_metadata}
 
         sorted_data = sorted(queries_with_metadata, key=lambda t: t[1:])
-        ordered_queries = SimpleFlaskWebQueryServer.recursive_dict_crafting(sorted_data, 1, len(sorted_data[0]))
+        ordered_queries = SimpleFlaskWebQueryServer.recursive_dict_crafting(sorted_data, 1, len(sorted_data[0])) if sorted_data else {}
         return {
             "objs": any_to_dict(objs.values()),
             "questions": any_to_dict(questions.values()),

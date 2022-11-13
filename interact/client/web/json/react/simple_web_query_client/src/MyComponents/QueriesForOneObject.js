@@ -1,18 +1,31 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+
+import QuestionsForObject from './ObjectAndQuestions.js';
 
 
-const ONEOBJET_DATA = [{'objs': [{'id': 3, 'graphid': 100, 'tablename': 'basicG', 'type': 'persistent.base_type.base_entity::_BasicEntity'}], 'questions': [{'id': 3, 'question': 'Is directed?', 'tablename': 'basicQ', 'type': 'persistent.base_type.base_entity::_BasicEntity'}, {'id': 4, 'question': 'Has root?', 'tablename': 'basicQ', 'type': 'persistent.base_type.base_entity::_BasicEntity'}], 'queries': [[11, 3, 3], [12, 3, 4]], 'ordered_queries': {3: [11, 12]}}]
-
-
-export default function QueriesForOneObject({data}) {
-    const [baseList, setBaseList] = React.useState(
-        ONEOBJET_DATA
-     );
+export default function QueriesForOneObject({data, item, submit}) {
     return (
-    <>
-      <Typography>
-        {JSON.stringify(data)}
-      </Typography>
-    </>);
+     <Box
+        sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        '& > :not(style)': {
+          m: 1,
+        },
+        minHeight: 500,
+      }}
+     >
+     {item &&
+         <Paper elevation={3}>
+             <QuestionsForObject objectId = {data.queries[item[0]].obj}
+                                queriesForObject = {item}
+                                data = {data}
+                                submit = {submit}/>
+         </Paper>
+      }
+    </Box>
+    );
 }

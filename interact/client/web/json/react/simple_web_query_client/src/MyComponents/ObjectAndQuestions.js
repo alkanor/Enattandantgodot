@@ -10,25 +10,30 @@ import FormControl from '@mui/material/FormControl';
 import FormLabel from '@mui/material/FormLabel';
 import {Sigma, RandomizeNodePositions, RelativeSize} from 'react-sigma';
 import Typography from '@mui/material/Typography';
+import G6 from "@antv/g6";
+
+import Graph from './Graph.js';
 
 
 function Choice({ choices,
                   curChoice,
-                  queryid }) {
+                  queryid,
+                  submit}) {
+  const [curAnswer, setCurAnswer] = useState(null);
+
   const associated = {
     YES: "success",
     NO: "secondary",
   };
 
   function setAnswer(event, answer) {
-    console.log(answer);
-    console.log(event);
+    setCurAnswer(answer);
+    submit(queryid, answer, true);
   }
 
-  function submit() {
+  function submitForm() {
     //http req
-    console.log(queryid);
-    console.log(curChoice);
+    submit(queryid, curAnswer);
   }
 
   return (
@@ -47,7 +52,7 @@ function Choice({ choices,
         </RadioGroup>
       </FormControl>
       <div>
-        <Button variant="contained" onClick={submit}>Submit</Button>
+        <Button variant="contained" onClick={submitForm}>Submit</Button>
       </div>
     </div>
   );
@@ -56,7 +61,8 @@ function Choice({ choices,
 function QuestionChoice({ question,
                           choices,
                           curChoice,
-                          queryid }) {
+                          queryid,
+                          submit}) {
 
   return (
     <>
@@ -67,7 +73,7 @@ function QuestionChoice({ question,
         </div>
       </Grid>
       <Grid item xs={7}>
-        <Choice choices={choices} queryid={queryid} curChoice={curChoice}/>
+        <Choice choices={choices} queryid={queryid} curChoice={curChoice} submit={submit}/>
       </Grid>
      </Grid>
     </>
@@ -76,46 +82,52 @@ function QuestionChoice({ question,
 
 function GraphDisplay({ graph }) {
 
-  let myGraph = {nodes: graph.data.nodes.map( nodeobj => ({id: nodeobj.id, label: nodeobj.obj.toString()}) ),
-                 edges: graph.data.edges.map( (edgeobj, index) => ({id: index, source: edgeobj.src, target: edgeobj.dst, label: edgeobj.obj.toString()}) )
+  console.log(graph);
+  let myGraph = {nodes: graph.data.nodes.map( nodeobj => ({id: nodeobj.id.toString(), label: nodeobj.obj.toString()}) ),
+                 edges: graph.data.edges.map(
+                    (edgeobj, index) => ({
+                        source: edgeobj.src.toString(),
+                        target: edgeobj.dst.toString(),
+                        label: edgeobj.obj.toString(),
+                        type:  edgeobj.src ==  edgeobj.dst ? 'loop' : 'line',
+                        style: graph?.metadata?.properties.includes('Directed') && {
+                              endArrow: {
+                              path: G6.Arrow.triangle(10, 20, 1),
+                              fill: '#f00',
+                            }
+                        }
+                    }) )
                  };
 
   return (
       <>
-        <Sigma graph={myGraph} settings={{drawEdges: true, clone: false}}>
-          <RelativeSize initialSize={15}/>
-          <RandomizeNodePositions/>
-        </Sigma>
+        <Graph inputData={myGraph} />
       </>
   );
 }
 
 
 
-export default function QuestionsForObject({objectId, queriesForObject, data}) {
-
-    console.log("===========");
-    console.log(objectId);
-    console.log(queriesForObject);
-    console.log(data);
-    console.log("+++++++++++++");
-
+export default function QuestionsForObject({objectId, queriesForObject, data, submit}) {
     return (
-    <>
+     <>
       <Typography>
-        {data && data.objects && JSON.stringify(data?.objects[objectId])}
+        {data && data.objs && data?.objs[objectId].tablename != "GraphJson" && JSON.stringify(data?.objs[objectId])}
       </Typography>
+
+      {data && data.objs && data.objs[objectId].tablename == "GraphJson" && <GraphDisplay graph={JSON.parse(data.objs[objectId].graph_json_as_string)} />}
 
       {queriesForObject?.map(
         (queryid) => {
             let query = data.queries[queryid];
-            console.log(query);
-            console.log(queryid);
-            console.log(data.questions[query.question]);
-
-            return <QuestionChoice key={queryid} question={data.questions[query.question]} choices={data.choices} queryid={queryid} curChoice={data.existing_answers[queryid]}/>
+            return <QuestionChoice key={queryid}
+                            question={data.questions[query.question]}
+                            choices={data.choices}
+                            queryid={queryid}
+                            curChoice={data.existing_answers && data.existing_answers[queryid]}
+                            submit={submit}/>
         }
        )
       }
-    </>);
+     </>);
 }

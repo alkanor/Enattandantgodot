@@ -116,7 +116,7 @@ export default function BasicTabs({baseUrl, maxSimultaneousQuestions = 200}) {
           return (
             <TabPanel value={value} index={i} key={i}>
               <RefreshIcon onClick={ () => forceChange(i) }/>
-              <BasicPagination Obj={Obj} data={mainData[i]}/>
+              <BasicPagination Obj={Obj} data={mainData[i]} baseUrl={baseUrl}/>
             </TabPanel>
         );
        })
