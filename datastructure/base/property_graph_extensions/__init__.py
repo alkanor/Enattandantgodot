@@ -57,4 +57,4 @@ properties_extensions = {
 
 def property_extensions(properties):
     for property in properties:
-        yield from properties_extensions[property]
+        yield from properties_extensions.get(property, [])

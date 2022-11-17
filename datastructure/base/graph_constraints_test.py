@@ -1,8 +1,8 @@
-
+from persistent.datastructure.list import LIST
 
 if __name__ == "__main__":
     from .graph_property import GraphProperty
-    from .graph import Graph, Edge
+    from .graph import Graph, Edge, Node, ConstraintNotFulfilled
 
     g = Graph(int, None, (GraphProperty.Directed,))
     nodelist = [3, 4, 1, 5, 9, 12, 100, 435, 999]
@@ -134,6 +134,57 @@ if __name__ == "__main__":
     for q in questions:
         new_query = QUERY_TYPE.GET_CREATE(session, questioned_object=qobj, question=q)
         print(new_query)
+
+
+
+
+    GroupedObject = LIST(QuestionedObject)
+    grouped_couple = GroupedObject(session, name="grouped per couple graphs progression")
+
+
+    import random
+
+    def generate_random(nnodes, minedges, maxedges):
+        Tedges = [(i,j) for i in range(0, nnodes) for j in range(0, i+1)]
+        random.shuffle(Tedges)
+        chosen = Tedges[:random.randint(minedges, maxedges)]
+        nodes = [Node(i) for i in range(nnodes)]
+        edges = [Edge(nodes[i], nodes[j], f"n{i}->n{j}") for i,j in chosen]
+        return nodes + edges
+
+    found_for_property = {}
+    while True:
+        bad = False
+        basegraph = generate_random(4, 0, 16)
+        print(basegraph)
+        print([p for p in GraphProperty if p not in found_for_property])
+        for p in GraphProperty:
+            if p not in found_for_property:
+                try:
+                    g = Graph.reconstruct(basegraph, additional_properties=[p], check=True)
+                    found_for_property[p] = g
+                except ConstraintNotFulfilled as e:
+                    print(e)
+                    bad = True
+        if not bad:
+            break
+
+    for p in found_for_property:
+        print(p)
+        print(any_to_json(found_for_property[p]))
+
+        q = Question.GET_CREATE(session, question=f"Is constraint {p} verified? (evaluated to true)")
+        qobj = QuestionedObject.GET_CREATE(session, graph_json_as_string=any_to_json(found_for_property[p]))
+
+        new_query = QUERY_TYPE.GET_CREATE(session, questioned_object=qobj, question=q)
+        print(new_query)
+
+    exit()
+
+    g.add(session, i1)
+    g.add(session, i2)
+    g2 = GroupedObject(session, name="test grouped 2")
+
 
     controller = SimpleFlaskWebQueryServer(QuestionedObject, Question, YesNoUnknown, 1, create_session)
     controller.run()

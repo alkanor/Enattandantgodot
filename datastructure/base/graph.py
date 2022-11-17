@@ -111,7 +111,7 @@ class Graph:
         extended_properties_set = extend_properties_from_dependancies(properties)
         self.__properties = extended_properties_set
         check_properties_compatibility(self.__properties)
-        self.__constraints = {GraphPropertyConstraints[property] for property in extended_properties_set if GraphPropertyConstraints[property]}
+        self.__constraints = {property: GraphPropertyConstraints[property] for property in extended_properties_set if GraphPropertyConstraints.get(property, None)}
 
         for name, method in property_extensions(self.__properties):
             self.__addmethod(method, name)
@@ -170,10 +170,10 @@ class Graph:
         return list(self.__properties)
 
     def check_constraints(self, method_name=False, *args):
-        for methods, constraint in self.__constraints:
+        for constraint_enum, (methods, constraint) in self.__constraints.items():
             if method_name in methods or not method_name:
                 if not constraint(self, *args):
-                    raise ConstraintNotFulfilled(constraint)
+                    raise ConstraintNotFulfilled(constraint_enum)
 
 
     def check_node(self, node):
@@ -413,7 +413,10 @@ class Graph:
         self.__nodes.difference_update(node)
 
 
-    def merge(self, graph_or_node_edge_generator):
+    #############################
+    # as all nodes and edges are internal for any graph, there is no way to know how to create edges between two merged graphs
+    # as a result, a dedicated edges_between_two_graphs list is needed, it must be edges from nodes in graph1/2 to nodes in graph2/1
+    def merge(self, graph_or_node_edge_generator, edges_between_two_graphs=None):
         if isinstance(graph_or_node_edge_generator, Graph):
             graph_or_node_edge_generator = graph_or_node_edge_generator.iterate()
 
@@ -428,7 +431,21 @@ class Graph:
         [self.check_target(e.edgeval) for e in edges_to_merge]
         edges = [Edge(nodes[indexed_nodes_to_merge[e.source]], nodes[indexed_nodes_to_merge[e.target]], e.edgeval) for e in edges_to_merge]
 
-        self.check_constraints(Graph.merge.__name__, nodes+edges)
+        edges_between = []
+        if edges_between_two_graphs:
+            from itertools import product
+            def class_edge(edge):
+                p = [self.nodes, indexed_nodes_to_merge]
+                transform = [lambda x: x, lambda x: nodes[x]]
+                for i, (src, tgt) in enumerate(product(zip(p, transform), zip(p, transform))):
+                    if edge.source in src[0] and edge.target in tgt[0]:
+                        return edge, src[1](src[0][edge.source]), tgt[1](tgt[0]([edge.target]))
+                assert False, "Source / Target not in current graph nodes nor merged one"
+            type_edges_between_two_graphs = [class_edge(e) for e in edges_between_two_graphs]
+            [self.check_target(e.edgeval) for e, _, _ in type_edges_between_two_graphs]
+            edges_between = [Edge(src, tgt, e.edgeval) for e, src, tgt in edges_to_merge]
+
+        self.check_constraints(Graph.merge.__name__, nodes+edges+edges_between)
 
         self.__nodes.update(nodes)
         for edge in edges:
@@ -460,20 +477,21 @@ class Graph:
     def reconstruct(graph_generator, additional_properties=None, check=True):
         to_add = []
 
-        first = graph_generator.__next__()
+        iterator = graph_generator.__iter__()
+        first = iterator.__next__()
         if type(first) == Node or type(first) == Edge:  # no type for nodes nor edges
             nodeType = None
             to_add.append(first)
         else:
             nodeType = first
-        second = graph_generator.__next__()
+        second = iterator.__next__()
         if type(second) == Node or type(second) == Edge:  # assume only node type is provided (or edge one if it does not match node type but edge one later)
             edgeType = None
             to_add.append(second)
         else:
             edgeType = second
 
-        all_elements = list(graph_generator) + to_add
+        all_elements = list(iterator) + to_add
         try:
             return Graph.__try_parse_graph(all_elements, nodeType, edgeType, additional_properties, check)
         except AssertionError as e1:
@@ -488,8 +506,8 @@ class Graph:
     @staticmethod
     def __try_parse_graph(all_elements, nodeType, edgeType, additional_properties, check):
         nodes = set()
-        per_nodes = {}
-        rev_per_nodes = {}
+        per_node = {}
+        rev_per_node = {}
 
         for element in all_elements:
             if type(element) == Node:
@@ -507,7 +525,7 @@ class Graph:
                 if nodeType is None and type(node2.nodeval) is not None:  # forcing the node type is previously undetected
                     nodeType = type(node2.nodeval)
                 if edgeType is None and type(val) is not None:  # forcing the edge type is previously undetected
-                    edgeType = val
+                    edgeType = type(val)
 
                 assert edgeType is None or type(val) == edgeType, f"Bad type when trying to parse edge, expected {edgeType} got {type(val)}"
                 assert type(node1) == Node, f"Bad type when trying to parse edge source, expected Node got {type(node1)}"
@@ -515,16 +533,16 @@ class Graph:
                 assert nodeType is None or type(node1.nodeval) == nodeType, f"Bad type when trying to parse source node, expected {nodeType} got {type(node1.nodeval)}"
                 assert nodeType is None or type(node2.nodeval) == nodeType, f"Bad type when trying to parse target node, expected {nodeType} got {type(node2.nodeval)}"
 
-                per_nodes.setdefault(node1, []).append((node2, val))
-                rev_per_nodes.setdefault(node2, []).append((node1, val))
+                per_node.setdefault(node1, []).append((node2, val))
+                rev_per_node.setdefault(node2, []).append((node1, val))
 
         base_graph = Graph(nodeType, edgeType, additional_properties)
         base_graph.__nodes = nodes
-        base_graph.__per_nodes = per_nodes
-        base_graph.__reverse_per_node = rev_per_nodes
+        base_graph.__per_node = per_node
+        base_graph.__reverse_per_node = rev_per_node
 
         if check:
-            base_graph.check_constraint()
+            base_graph.check_constraints()
 
         return base_graph
 
@@ -542,9 +560,13 @@ def extend_properties_from_dependancies(properties):
         return set()
     properties_set = set([properties] if type(properties) == GraphProperty else properties)
     extended_properties_set = set(properties_set)
-    for property in properties_set:
-        if GraphPropertyDependancies[property]:
-            extended_properties_set = extended_properties_set.union(GraphPropertyDependancies[property])
+    while True:
+        initial_n_properties = len(extended_properties_set)
+        for property in extended_properties_set:
+            if GraphPropertyDependancies[property]:
+                extended_properties_set = extended_properties_set.union(GraphPropertyDependancies[property])
+        if len(extended_properties_set) == initial_n_properties:
+            break
     return extended_properties_set
 
 
@@ -553,6 +575,9 @@ def check_properties_compatibility(properties=None):
         return True
 
     assert type(properties) == GraphProperty or hasattr(properties, "__iter__"), "properties argument need to be a property iterable or a property"
+
+    if type(properties) == GraphProperty:
+        properties = [properties]
 
     index_in_properties_partition = [[(property, i) for i, partition in enumerate(GraphPropertiesPartition) if property in partition]
                                         for property in properties]

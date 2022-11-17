@@ -12,6 +12,8 @@ GraphPropertiesPartition = [
             property.value >= GraphProperty.Binary.value and property.value <= GraphProperty.NoChildConstraint.value]),
     tuple([property for property in GraphProperty if
             property.value >= GraphProperty.VerticeDegreeOne.value and property.value <= GraphProperty.NoVerticeDegreeConstraint.value]),
+    tuple([property for property in GraphProperty if
+            property.value >= GraphProperty.EquivalentTreeAcyclic.value]),
 ]
 
 partitionedProperties = set([i for x in GraphPropertiesPartition for i in x])
