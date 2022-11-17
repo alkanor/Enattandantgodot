@@ -255,7 +255,7 @@ def max_children_per_vertice_constraint(max_children):
                 return True
             case None:
                 for node in current_graph.nodes():
-                    direct_children = current_graph.children_number(node)
+                    direct_children = current_graph.children_number(node, exclude_current=True)
                     if direct_children > max_children:
                         return False
                 return True

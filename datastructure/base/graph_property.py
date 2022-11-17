@@ -8,12 +8,12 @@ class GraphProperty(Enum):
 
     AcyclicDirected = 4,
     AcyclicNonDirected = 5,
-    NonAcyclic = 7,          # default case related to cycles
+    AnyCyclic = 7,          # default case related to cycles
 
     WeaklyConnected = 8,     # for Oriented graph, weakly connected = associated non oriented graph is connected
     StronglyConnected = 9,   # for Oriented graph, like connected for a non oriented graph
     Connected = 10,          # for NonOriented graph, there is a path from every node to any node
-    NonConnected = 15,       # default case related to connectivity
+    AnyConnected = 15,       # default case related to connectivity
 
     # for oriented graph properties about number of children / parent
     LessThanOneParent = 16,

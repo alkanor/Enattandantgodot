@@ -179,12 +179,10 @@ if __name__ == "__main__":
         new_query = QUERY_TYPE.GET_CREATE(session, questioned_object=qobj, question=q)
         print(new_query)
 
-    exit()
 
-    g.add(session, i1)
-    g.add(session, i2)
-    g2 = GroupedObject(session, name="test grouped 2")
-
+    #g.add(session, i1)
+    #g.add(session, i2)
+    #g2 = GroupedObject(session, name="test grouped 2")
 
     controller = SimpleFlaskWebQueryServer(QuestionedObject, Question, YesNoUnknown, 1, create_session)
     controller.run()
